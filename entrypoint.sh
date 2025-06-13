@@ -2,7 +2,7 @@
 
 
 python /workspace/backend/app.py & 
-cd /workspace/frontend && npm start &
+cp -a /workspace/frontend/. ./frontend/ && cd ./frontend && npm start &
 
 ### SSH Server
 # BIG: ASSUMES YOU OVERLAY THE $USER'S .ssh folder into the container. WILL NOT WORK IF YOU DON'T
