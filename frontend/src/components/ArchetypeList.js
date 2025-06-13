@@ -53,7 +53,6 @@ const ArchetypeList = ({ onDelete }) => {
       } catch (error) {
         console.error('Error deleting archetype:', error);
       }
- MOE
     }
   };
 
