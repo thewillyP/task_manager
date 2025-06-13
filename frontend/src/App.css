@@ -1,0 +1,45 @@
+.app {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  
+  h1, h2 {
+    text-align: center;
+  }
+  
+  .editor, .list, .queue, .history {
+    border: 1px solid #ccc;
+    padding: 20px;
+    border-radius: 5px;
+  }
+  
+  textarea {
+    width: 100%;
+    min-height: 200px;
+    margin-bottom: 10px;
+  }
+  
+  button {
+    margin: 5px;
+    padding: 8px 16px;
+  }
+  
+  .task-item {
+    padding: 10px;
+    margin: 5px 0;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    background: #fff;
+    cursor: move;
+  }
+  
+  .task-item.dragging {
+    opacity: 0.5;
+  }
