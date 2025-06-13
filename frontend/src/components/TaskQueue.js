@@ -29,17 +29,12 @@ const TaskItem = ({ task, index, moveTask, onCancel }) => {
   );
 };
 
-const TaskQueue = ({ onQueueChange }) => {
+const TaskQueue = ({ onQueueChange, refreshKey }) => {
   const [tasks, setTasks] = useState([]);
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:5000/ws');
-    ws.onmessage = () => {
-      fetchTasks();
-    };
     fetchTasks();
-    return () => ws.close();
-  }, []);
+  }, [refreshKey]);
 
   const fetchTasks = async () => {
     try {
@@ -62,6 +57,7 @@ const TaskQueue = ({ onQueueChange }) => {
           position: index
         })
       ));
+      onQueueChange();
     } catch (error) {
       console.error('Error updating task positions:', error);
     }

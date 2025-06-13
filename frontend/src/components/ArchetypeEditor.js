@@ -3,7 +3,7 @@ import axios from 'axios';
 import JSONInput from 'react-json-editor-ajrm';
 import locale from 'react-json-editor-ajrm/locale/en';
 
-const ArchetypeEditor = ({ onSave }) => {
+const ArchetypeEditor = ({ onSave, refreshKey }) => {
   const [buildJson, setBuildJson] = useState({});
   const [taskJson, setTaskJson] = useState({ num_jobs: 1, pipeline: "" });
   const [selectedBuildId, setSelectedBuildId] = useState('');
@@ -13,7 +13,7 @@ const ArchetypeEditor = ({ onSave }) => {
 
   useEffect(() => {
     fetchArchetypes();
-  }, []);
+  }, [refreshKey]);
 
   const fetchArchetypes = async () => {
     try {

@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const TaskHistory = ({ onRerun }) => {
+const TaskHistory = ({ onRerun, refreshKey }) => {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:5000/ws');
-    ws.onmessage = () => {
-      fetchHistory();
-    };
     fetchHistory();
-    return () => ws.close();
-  }, []);
+  }, [refreshKey]);
 
   const fetchHistory = async () => {
     try {

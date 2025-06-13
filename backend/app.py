@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from flask_sock import Sock
 from database import (
     init_db,
     create_build_archetype,
@@ -15,33 +14,12 @@ from database import (
 import threading
 import time
 import requests
-import json
 
 app = Flask(__name__)
 CORS(app)
-sock = Sock(app)
 
 # Lock for synchronizing queue processing
 queue_lock = threading.Lock()
-clients = set()
-
-
-@sock.route("/ws")
-def ws(ws):
-    clients.add(ws)
-    try:
-        while True:
-            ws.receive()  # Keep connection alive
-    finally:
-        clients.remove(ws)
-
-
-def notify_clients():
-    for client in clients.copy():
-        try:
-            client.send(json.dumps({"type": "update"}))
-        except:
-            clients.remove(client)
 
 
 # Background task for queue processing
@@ -54,7 +32,6 @@ def process_queue():
                 # TODO: Replace with your HTTP command
                 print(f"Processing task {instance['id']} with HTTP command")
                 update_task_instance(instance["id"], "done", 0)
-                notify_clients()
             except Exception as e:
                 print(f"Error processing task {instance['id']}: {e}")
         conn.close()
@@ -76,7 +53,6 @@ def handle_build_archetypes():
     if request.method == "POST":
         data = request.json
         archetype_id = create_build_archetype(data["content"])
-        notify_clients()
         return jsonify({"id": archetype_id}), 201
     return jsonify(get_build_archetypes())
 
@@ -84,7 +60,6 @@ def handle_build_archetypes():
 @app.route("/api/build_archetypes/<int:id>", methods=["DELETE"])
 def delete_build_archetype(id):
     delete_archetype("build_archetypes", id)
-    notify_clients()
     return "", 204
 
 
@@ -95,7 +70,6 @@ def handle_task_archetypes():
         if "num_jobs" not in data["content"] or "pipeline" not in data["content"]:
             return jsonify({"error": "num_jobs and pipeline are required"}), 400
         archetype_id = create_task_archetype(data["content"])
-        notify_clients()
         return jsonify({"id": archetype_id}), 201
     return jsonify(get_task_archetypes())
 
@@ -103,7 +77,6 @@ def handle_task_archetypes():
 @app.route("/api/task_archetypes/<int:id>", methods=["DELETE"])
 def delete_task_archetype(id):
     delete_archetype("task_archetypes", id)
-    notify_clients()
     return "", 204
 
 
@@ -112,7 +85,6 @@ def handle_task_instances():
     if request.method == "POST":
         data = request.json
         instance_id = create_task_instance(data["build_archetype_id"], data["task_archetype_id"], data["num_jobs"])
-        notify_clients()
         process_queue()
         return jsonify({"id": instance_id}), 201
     state = request.args.get("state", "pending")
@@ -123,7 +95,6 @@ def handle_task_instances():
 def update_task_instance_route(id):
     data = request.json
     update_task_instance(id, data.get("state"), data.get("num_jobs_remaining"), data.get("position"))
-    notify_clients()
     if data.get("state") == "pending" or data.get("num_jobs_remaining") is not None:
         process_queue()
     return "", 204
@@ -133,7 +104,6 @@ def update_task_instance_route(id):
 def rerun_task_instance(id):
     data = request.json
     update_task_instance(id, "pending", data["num_jobs_remaining"])
-    notify_clients()
     process_queue()
     return "", 204
 

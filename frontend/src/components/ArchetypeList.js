@@ -3,20 +3,15 @@ import axios from 'axios';
 import JSONInput from 'react-json-editor-ajrm';
 import locale from 'react-json-editor-ajrm/locale/en';
 
-const ArchetypeList = ({ onDelete }) => {
+const ArchetypeList = ({ onDelete, refreshKey }) => {
   const [buildArchetypes, setBuildArchetypes] = useState([]);
   const [taskArchetypes, setTaskArchetypes] = useState([]);
   const [editing, setEditing] = useState(null);
   const [editJson, setEditJson] = useState({});
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:5000/ws');
-    ws.onmessage = () => {
-      fetchArchetypes();
-    };
     fetchArchetypes();
-    return () => ws.close();
-  }, []);
+  }, [refreshKey]);
 
   const fetchArchetypes = async () => {
     try {

@@ -8,10 +8,10 @@ import TaskHistory from './components/TaskHistory';
 import './App.css';
 
 function App() {
-  const [refresh, setRefresh] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const handleRefresh = () => {
-    setRefresh(prev => prev + 1);
+    setRefreshKey(prev => prev + 1);
   };
 
   return (
@@ -19,10 +19,10 @@ function App() {
       <div className="app">
         <h1>Task Queue Manager</h1>
         <div className="container">
-          <ArchetypeEditor onSave={handleRefresh} />
-          <ArchetypeList onDelete={handleRefresh} />
-          <TaskQueue onQueueChange={handleRefresh} />
-          <TaskHistory onRerun={handleRefresh} />
+          <ArchetypeEditor onSave={handleRefresh} refreshKey={refreshKey} />
+          <ArchetypeList onDelete={handleRefresh} refreshKey={refreshKey} />
+          <TaskQueue onQueueChange={handleRefresh} refreshKey={refreshKey} />
+          <TaskHistory onRerun={handleRefresh} refreshKey={refreshKey} />
         </div>
       </div>
     </DndProvider>

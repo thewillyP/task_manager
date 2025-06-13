@@ -35,6 +35,22 @@ button:hover {
   background-color: #2563eb;
 }
 
+button.bg-red-500 {
+  background-color: #ef4444;
+}
+
+button.bg-red-500:hover {
+  background-color: #dc2626;
+}
+
+button.bg-gray-500 {
+  background-color: #6b7280;
+}
+
+button.bg-gray-500:hover {
+  background-color: #4b5563;
+}
+
 .task-item {
   padding: 10px;
   margin: 5px 0;
