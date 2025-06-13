@@ -16,7 +16,8 @@ import time
 import requests
 
 app = Flask(__name__)
-CORS(app)
+# Explicitly allow localhost:3000 for CORS
+CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 
 # Lock for synchronizing queue processing
 queue_lock = threading.Lock()
