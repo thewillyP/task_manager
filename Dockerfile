@@ -11,6 +11,11 @@ RUN apt-get update \
     wget \
     git \
     nano \
+    net-tools \
+    dnsutils \
+    htop \
+    lsof \
+    strace \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

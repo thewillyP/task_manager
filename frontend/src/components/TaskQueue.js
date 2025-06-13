@@ -24,7 +24,7 @@ const TaskItem = ({ task, index, moveTask, onCancel }) => {
   return (
     <div ref={node => drag(drop(node))} className={`task-item ${isDragging ? 'dragging' : ''}`}>
       <p>Task {task.id}: {task.task_archetype_content.pipeline} (Jobs: {task.num_jobs_remaining})</p>
-      <button onClick={() => onCancel(task.id)}>Cancel</button>
+      <button onClick={() => onCancel(task.id)} className="bg-red-500">Cancel</button>
     </div>
   );
 };
@@ -33,14 +33,21 @@ const TaskQueue = ({ onQueueChange }) => {
   const [tasks, setTasks] = useState([]);
 
   useEffect(() => {
+    const ws = new WebSocket('ws://localhost:5000/ws');
+    ws.onmessage = () => {
+      fetchTasks();
+    };
     fetchTasks();
-    const interval = setInterval(fetchTasks, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
+    return () => ws.close();
   }, []);
 
   const fetchTasks = async () => {
-    const res = await axios.get('http://localhost:5000/api/task_instances?state=pending');
-    setTasks(res.data);
+    try {
+      const res = await axios.get('/api/task_instances?state=pending');
+      setTasks(res.data);
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    }
   };
 
   const moveTask = async (fromIndex, toIndex) => {
@@ -49,18 +56,24 @@ const TaskQueue = ({ onQueueChange }) => {
     newTasks.splice(toIndex, 0, movedTask);
     setTasks(newTasks);
     
-    // Update positions in backend
-    await Promise.all(newTasks.map((task, index) => 
-      axios.put(`http://localhost:5000/api/task_instances/${task.id}`, {
-        position: index
-      })
-    ));
+    try {
+      await Promise.all(newTasks.map((task, index) => 
+        axios.put(`/api/task_instances/${task.id}`, {
+          position: index
+        })
+      ));
+    } catch (error) {
+      console.error('Error updating task positions:', error);
+    }
   };
 
   const handleCancel = async (id) => {
-    await axios.put(`http://localhost:5000/api/task_instances/${id}`, { state: 'cancelled' });
-    fetchTasks();
-    onQueueChange();
+    try {
+      await axios.put(`/api/task_instances/${id}`, { state: 'cancelled' });
+      onQueueChange();
+    } catch (error) {
+      console.error('Error cancelling task:', error);
+    }
   };
 
   return (

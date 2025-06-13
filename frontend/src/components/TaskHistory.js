@@ -5,21 +5,34 @@ const TaskHistory = ({ onRerun }) => {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
+    const ws = new WebSocket('ws://localhost:5000/ws');
+    ws.onmessage = () => {
+      fetchHistory();
+    };
     fetchHistory();
+    return () => ws.close();
   }, []);
 
   const fetchHistory = async () => {
-    const res = await axios.get('http://localhost:5000/api/task_instances?state=done,cancelled');
-    setHistory(res.data);
+    try {
+      const res = await axios.get('/api/task_instances?state=done,cancelled');
+      setHistory(res.data);
+    } catch (error) {
+      console.error('Error fetching history:', error);
+    }
   };
 
   const handleRerun = async (task) => {
-    await axios.post('http://localhost:5000/api/task_instances', {
-      build_archetype_id: task.build_archetype_id,
-      task_archetype_id: task.task_archetype_id,
-      num_jobs: task.task_archetype_content.num_jobs
-    });
-    onRerun();
+    try {
+      await axios.post('/api/task_instances', {
+        build_archetype_id: task.build_archetype_id,
+        task_archetype_id: task.task_archetype_id,
+        num_jobs: task.task_archetype_content.num_jobs
+      });
+      onRerun();
+    } catch (error) {
+      console.error('Error rerunning task:', error);
+    }
   };
 
   return (
