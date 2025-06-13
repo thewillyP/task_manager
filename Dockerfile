@@ -21,7 +21,7 @@ RUN mkdir /var/run/sshd
 
 WORKDIR /workspace
 
-COPY .. 
+COPY . .
 
 RUN chmod +x ./entrypoint.sh
 
