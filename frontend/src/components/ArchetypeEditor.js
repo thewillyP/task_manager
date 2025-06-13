@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import JSONInput from 'react-json-editor-ajrm';
-import locale from 'react-json-editor-ajrm/locale/en';
+import AceEditor from 'react-ace';
+import 'brace/mode/json';
+import 'brace/theme/monokai';
 
 const ArchetypeEditor = ({ onSave, refreshKey }) => {
-  const [buildJson, setBuildJson] = useState({});
-  const [taskJson, setTaskJson] = useState({ num_jobs: 1, pipeline: "" });
+  const [buildJson, setBuildJson] = useState('{}');
+  const [taskJson, setTaskJson] = useState('{\n  "num_jobs": 1,\n  "pipeline": ""\n}');
   const [selectedBuildId, setSelectedBuildId] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [buildArchetypes, setBuildArchetypes] = useState([]);
@@ -28,25 +29,27 @@ const ArchetypeEditor = ({ onSave, refreshKey }) => {
 
   const handleSaveBuild = async () => {
     try {
-      await axios.post('/api/build_archetypes', { content: buildJson });
-      setBuildJson({});
+      const parsedJson = JSON.parse(buildJson);
+      await axios.post('/api/build_archetypes', { content: parsedJson });
+      setBuildJson('{}');
       onSave();
     } catch (error) {
-      alert('Invalid JSON or server error');
+      alert('Invalid JSON or server error: ' + (error.response?.data?.error || error.message));
     }
   };
 
   const handleSaveTask = async () => {
     try {
-      if (!taskJson.num_jobs || !taskJson.pipeline) {
+      const parsedJson = JSON.parse(taskJson);
+      if (!parsedJson.num_jobs || !parsedJson.pipeline) {
         alert('Task archetype must have num_jobs and pipeline');
         return;
       }
-      await axios.post('/api/task_archetypes', { content: taskJson });
-      setTaskJson({ num_jobs: 1, pipeline: "" });
+      await axios.post('/api/task_archetypes', { content: parsedJson });
+      setTaskJson('{\n  "num_jobs": 1,\n  "pipeline": ""\n}');
       onSave();
     } catch (error) {
-      alert('Invalid JSON or server error');
+      alert('Invalid JSON or server error: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -64,7 +67,7 @@ const ArchetypeEditor = ({ onSave, refreshKey }) => {
       });
       onSave();
     } catch (error) {
-      alert('Error submitting task');
+      alert('Error submitting task: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -74,23 +77,29 @@ const ArchetypeEditor = ({ onSave, refreshKey }) => {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <h3>Build Archetype</h3>
-          <JSONInput
-            placeholder={buildJson}
-            onChange={(e) => setBuildJson(e.jsObject)}
-            locale={locale}
-            height="200px"
-            width="100%"
+          <AceEditor
+            mode="json"
+            theme="monokai"
+            value={buildJson}
+            onChange={setBuildJson}
+            name="build-editor"
+            editorProps={{ $blockScrolling: true }}
+            setOptions={{ useWorker: false }}
+            className="ace-editor"
           />
           <button onClick={handleSaveBuild}>Save Build Archetype</button>
         </div>
         <div>
           <h3>Task Archetype</h3>
-          <JSONInput
-            placeholder={taskJson}
-            onChange={(e) => setTaskJson(e.jsObject)}
-            locale={locale}
-            height="200px"
-            width="100%"
+          <AceEditor
+            mode="json"
+            theme="monokai"
+            value={taskJson}
+            onChange={setTaskJson}
+            name="task-editor"
+            editorProps={{ $blockScrolling: true }}
+            setOptions={{ useWorker: false }}
+            className="ace-editor"
           />
           <button onClick={handleSaveTask}>Save Task Archetype</button>
         </div>

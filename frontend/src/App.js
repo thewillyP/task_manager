@@ -18,6 +18,11 @@ function App() {
     <DndProvider backend={HTML5Backend}>
       <div className="app">
         <h1>Task Queue Manager</h1>
+        <div className="refresh-container">
+          <button onClick={handleRefresh} className="refresh-button">
+            Refresh Queue & History
+          </button>
+        </div>
         <div className="container">
           <ArchetypeEditor onSave={handleRefresh} refreshKey={refreshKey} />
           <ArchetypeList onDelete={handleRefresh} refreshKey={refreshKey} />

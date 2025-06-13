@@ -1,3 +1,6 @@
+import asyncio
+import threading
+import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from database import (
@@ -11,15 +14,28 @@ from database import (
     get_task_instances,
     update_task_instance,
 )
-import threading
-import time
-import requests
 
 app = Flask(__name__)
 CORS(app)
 
 # Lock for synchronizing queue processing
 queue_lock = threading.Lock()
+
+
+# Async function for delayed queue processing
+async def delayed_process_queue(task_id=None):
+    print(f"Delaying queue processing for task {task_id} if task_id else 'none' by 5 seconds")
+    await asyncio.sleep(5)
+    print(f"Executing queue processing after delay for task {task_id if task_id else 'none'}")
+    process_queue()
+
+
+# Function to run async delay in a separate thread
+def run_delayed_process_queue(task_id=None):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(delayed_process_queue(task_id))
+    loop.close()
 
 
 # Background task for queue processing
@@ -85,7 +101,8 @@ def handle_task_instances():
     if request.method == "POST":
         data = request.json
         instance_id = create_task_instance(data["build_archetype_id"], data["task_archetype_id"], data["num_jobs"])
-        process_queue()
+        # Start delayed queue processing in a separate thread
+        threading.Thread(target=run_delayed_process_queue, args=(instance_id,), daemon=True).start()
         return jsonify({"id": instance_id}), 201
     state = request.args.get("state", "pending")
     return jsonify(get_task_instances(state.split(",")))
@@ -96,7 +113,8 @@ def update_task_instance_route(id):
     data = request.json
     update_task_instance(id, data.get("state"), data.get("num_jobs_remaining"), data.get("position"))
     if data.get("state") == "pending" or data.get("num_jobs_remaining") is not None:
-        process_queue()
+        # Start delayed queue processing in a separate thread
+        threading.Thread(target=run_delayed_process_queue, args=(id,), daemon=True).start()
     return "", 204
 
 
@@ -104,7 +122,8 @@ def update_task_instance_route(id):
 def rerun_task_instance(id):
     data = request.json
     update_task_instance(id, "pending", data["num_jobs_remaining"])
-    process_queue()
+    # Start delayed queue processing in a separate thread
+    threading.Thread(target=run_delayed_process_queue, args=(id,), daemon=True).start()
     return "", 204
 
 

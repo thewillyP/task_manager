@@ -27,6 +27,7 @@ const TaskHistory = ({ onRerun, refreshKey }) => {
       onRerun();
     } catch (error) {
       console.error('Error rerunning task:', error);
+      alert('Error rerunning task: ' + (error.response?.data?.error || error.message));
     }
   };
 

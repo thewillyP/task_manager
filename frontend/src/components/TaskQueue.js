@@ -60,6 +60,7 @@ const TaskQueue = ({ onQueueChange, refreshKey }) => {
       onQueueChange();
     } catch (error) {
       console.error('Error updating task positions:', error);
+      alert('Error updating task positions: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -69,6 +70,7 @@ const TaskQueue = ({ onQueueChange, refreshKey }) => {
       onQueueChange();
     } catch (error) {
       console.error('Error cancelling task:', error);
+      alert('Error cancelling task: ' + (error.response?.data?.error || error.message));
     }
   };
 
