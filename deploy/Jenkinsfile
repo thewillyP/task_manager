@@ -1,28 +1,46 @@
 pipeline {
     agent any
 
+    parameters {
+        booleanParam(name: 'FORCE_REBUILD', defaultValue: false, description: 'Force rebuild of the Singularity image')
+    }
+
     environment {
         SSH_HOST = 'greene.hpc.nyu.edu'
-        SCRATCH_DIR = "/scratch/wlp9800"  // Replace with your path
-        LOG_DIR = "/vast/wlp9800/logs"  // Replace with your path
+        SCRATCH_DIR = "/scratch/wlp9800"
+        LOG_DIR = "/vast/wlp9800/logs"
+        SIF_PATH = "/scratch/wlp9800/images/task_manager.sif"
 
     }
 
     stages {
-        stage('Build with srun (Image + Overlay)') {
+        stage('Build with srun (conditionally)') {
             steps {
-                sh """
-                ssh -o StrictHostKeyChecking=no ${SSH_HOST} '
-                    srun --nodes=1 --ntasks=1 --mem=4G --time=00:15:00 \\
-                        --job-name=build_task_manager \\
-                        bash -c "
-                            mkdir -p ${SCRATCH_DIR}/images ${SCRATCH_DIR}/task_manager
-                            cp -rp /scratch/work/public/overlay-fs-ext3/overlay-5GB-3.2M.ext3.gz ${SCRATCH_DIR}/task_manager.ext3.gz
-                            gunzip -f ${SCRATCH_DIR}/task_manager.ext3.gz
-                            singularity build --force ${SCRATCH_DIR}/images/task_manager.sif docker://thewillyp/task_manager:latest
-                        "
-                '
-                """
+                script {
+                    def checkCommand = """
+                        ssh -o StrictHostKeyChecking=no ${SSH_HOST} '[ -f ${SIF_PATH} ] && echo exists || echo missing'
+                    """.trim()
+
+                    def result = sh(script: checkCommand, returnStdout: true).trim()
+
+                    if (params.FORCE_REBUILD || result == "missing") {
+                        echo "Building image (reason: ${params.FORCE_REBUILD ? 'forced' : 'not found'})"
+                        sh """
+                        ssh -o StrictHostKeyChecking=no ${SSH_HOST} '
+                            srun --nodes=1 --ntasks=1 --mem=4G --time=00:15:00 \\
+                                --job-name=build_task_manager \\
+                                bash -c "
+                                    mkdir -p ${SCRATCH_DIR}/images ${SCRATCH_DIR}/task_manager
+                                    cp -rp /scratch/work/public/overlay-fs-ext3/overlay-5GB-3.2M.ext3.gz ${SCRATCH_DIR}/task_manager.ext3.gz
+                                    gunzip -f ${SCRATCH_DIR}/task_manager.ext3.gz
+                                    singularity build --force ${SIF_PATH} docker://thewillyp/task_manager:latest
+                                "
+                        '
+                        """
+                    } else {
+                        echo "Skipping build: ${SIF_PATH} already exists and FORCE_REBUILD=false"
+                    }
+                }
             }
         }
 
