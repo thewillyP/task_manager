@@ -15,22 +15,30 @@ pipeline {
     }
 
     stages {
-        stage('Check SLURM availability on executor') {
+        stage('Test SLURM via hostname SSH') {
             steps {
                 sh '''
-                echo "Checking srun and sbatch availability on this node..."
-                
-                echo -n "srun: "
-                command -v srun || echo "NOT FOUND"
+                echo "Getting current hostname..."
+                HOSTNAME=$(hostname)
+                echo "Current executor hostname: $HOSTNAME"
 
-                echo -n "sbatch: "
-                command -v sbatch || echo "NOT FOUND"
+                echo "Attempting SSH to $HOSTNAME and checking SLURM commands..."
 
-                echo "Trying: srun --version"
-                srun --version || echo "srun failed"
+                ssh $HOSTNAME '
+                    echo "Inside SSH session on: $(hostname)"
+                    
+                    echo -n "srun: "
+                    command -v srun || echo "NOT FOUND"
 
-                echo "Trying: sbatch --version"
-                sbatch --version || echo "sbatch failed"
+                    echo -n "sbatch: "
+                    command -v sbatch || echo "NOT FOUND"
+
+                    echo "srun --version:"
+                    srun --version || echo "srun failed"
+
+                    echo "sbatch --version:"
+                    sbatch --version || echo "sbatch failed"
+                '
                 '''
             }
         }
