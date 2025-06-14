@@ -24,7 +24,7 @@ pipeline {
 
                 echo "Attempting SSH to $HOSTNAME and checking SLURM commands..."
 
-                ssh $HOSTNAME '
+                ssh -o StrictHostKeyChecking=no $HOSTNAME '
                     echo "Inside SSH session on: $(hostname)"
                     
                     echo -n "srun: "
