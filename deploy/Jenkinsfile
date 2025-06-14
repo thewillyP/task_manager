@@ -6,55 +6,25 @@ pipeline {
     }
 
     environment {
-        SSH_HOST = 'greene.hpc.nyu.edu'
         SSH_USER = 'wlp9800'
         SCRATCH_DIR = "/scratch/wlp9800"
         LOG_DIR = "/vast/wlp9800/logs"
         SIF_PATH = "/scratch/wlp9800/images/task_manager.sif"
-
     }
 
     stages {
-        stage('Test SLURM via hostname SSH') {
+        stage('Determine Executor Hostname') {
             steps {
-                sh '''
-                echo "Getting current hostname..."
-                HOSTNAME=$(hostname)
-                echo "Current executor hostname: $HOSTNAME"
-
-                echo "Attempting SSH to $HOSTNAME and checking SLURM commands..."
-
-                ssh -o StrictHostKeyChecking=no wlp9800@$HOSTNAME '
-                    echo "Inside SSH session on: $(hostname)"
-                    
-                    echo -n "srun: "
-                    command -v srun || echo "NOT FOUND"
-
-                    echo -n "sbatch: "
-                    command -v sbatch || echo "NOT FOUND"
-
-                    echo "srun --version:"
-                    srun --version || echo "srun failed"
-
-                    echo "sbatch --version:"
-                    sbatch --version || echo "sbatch failed"
-                '
-                '''
-            }
-        }
-        stage('Test SSH connection') {
-            steps {
-                sh """
-                echo "Testing SSH connectivity to ${SSH_HOST}..."
-                ssh -o BatchMode=yes -o StrictHostKeyChecking=no ${SSH_HOST} 'hostname && whoami'
-                echo "SSH connection succeeded."
-                """
+                script {
+                    env.EXEC_HOST = sh(script: "hostname", returnStdout: true).trim()
+                    echo "Executor hostname: ${env.EXEC_HOST}"
+                }
             }
         }
         stage('Cancel existing task_manager jobs') {
             steps {
                 sh """
-                ssh ${SSH_HOST} '
+                ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
                     active_jobs=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
                     if [ -n "\$active_jobs" ]; then
                         echo "Found running task_manager jobs: \$active_jobs"
@@ -69,11 +39,12 @@ pipeline {
                 """
             }
         }
+
         stage('Build with srun (conditionally)') {
             steps {
                 script {
                     def checkCommand = """
-                        ssh ${SSH_HOST} '[ -f ${SIF_PATH} ] && echo exists || echo missing'
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '[ -f ${SIF_PATH} ] && echo exists || echo missing'
                     """.trim()
 
                     def result = sh(script: checkCommand, returnStdout: true).trim()
@@ -81,7 +52,7 @@ pipeline {
                     if (params.FORCE_REBUILD || result == "missing") {
                         echo "Building image (reason: ${params.FORCE_REBUILD ? 'forced' : 'not found'})"
                         sh """
-                        ssh ${SSH_HOST} '
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
                             srun --nodes=1 --ntasks=1 --mem=4G --time=00:15:00 \\
                                 --job-name=build_task_manager \\
                                 bash -c "
@@ -102,7 +73,7 @@ pipeline {
         stage('Run via sbatch (Using Overlay)') {
             steps {
                 sh """
-                ssh ${SSH_HOST} 'sbatch <<EOF
+                ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=task_manager
 #SBATCH --nodes=1
@@ -114,12 +85,11 @@ pipeline {
 #SBATCH --output=${LOG_DIR}/run-%j.out
 #SBATCH --error=${LOG_DIR}/run-%j.err
 
-
 singularity run --containall --cleanenv --no-home \\
   --overlay ${SCRATCH_DIR}/task_manager.ext3:rw \\
   --bind /home/${SSH_USER}/.ssh \\
   --bind ${SCRATCH_DIR}/task_manager:/app \\
-  ${SCRATCH_DIR}/images/task_manager.sif
+  ${SIF_PATH}
 EOF'
                 """
             }
