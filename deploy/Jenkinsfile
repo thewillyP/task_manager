@@ -18,7 +18,7 @@ pipeline {
         stage('Cancel existing task_manager jobs') {
             steps {
                 sh """
-                ssh -o StrictHostKeyChecking=no ${SSH_HOST} '
+                ssh ${SSH_HOST} '
                     active_jobs=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
                     if [ -n "\$active_jobs" ]; then
                         echo "Found running task_manager jobs: \$active_jobs"
@@ -37,7 +37,7 @@ pipeline {
             steps {
                 script {
                     def checkCommand = """
-                        ssh -o StrictHostKeyChecking=no ${SSH_HOST} '[ -f ${SIF_PATH} ] && echo exists || echo missing'
+                        ssh ${SSH_HOST} '[ -f ${SIF_PATH} ] && echo exists || echo missing'
                     """.trim()
 
                     def result = sh(script: checkCommand, returnStdout: true).trim()
@@ -45,7 +45,7 @@ pipeline {
                     if (params.FORCE_REBUILD || result == "missing") {
                         echo "Building image (reason: ${params.FORCE_REBUILD ? 'forced' : 'not found'})"
                         sh """
-                        ssh -o StrictHostKeyChecking=no ${SSH_HOST} '
+                        ssh ${SSH_HOST} '
                             srun --nodes=1 --ntasks=1 --mem=4G --time=00:15:00 \\
                                 --job-name=build_task_manager \\
                                 bash -c "
@@ -66,7 +66,7 @@ pipeline {
         stage('Run via sbatch (Using Overlay)') {
             steps {
                 sh """
-                ssh -o StrictHostKeyChecking=no ${SSH_HOST} 'sbatch <<EOF
+                ssh ${SSH_HOST} 'sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=task_manager
 #SBATCH --nodes=1
