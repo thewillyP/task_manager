@@ -1,0 +1,55 @@
+pipeline {
+    agent any
+
+    environment {
+        SSH_HOST = 'greene.hpc.nyu.edu'
+        SCRATCH_DIR = "/scratch/wlp9800"  // Replace with your path
+        LOG_DIR = "/vast/wlp9800/logs"  // Replace with your path
+
+    }
+
+    stages {
+        stage('Build with srun (Image + Overlay)') {
+            steps {
+                sh """
+                ssh -o StrictHostKeyChecking=no ${SSH_HOST} '
+                    srun --nodes=1 --ntasks=1 --mem=4G --time=00:15:00 \\
+                        --job-name=build_task_manager \\
+                        bash -c "
+                            mkdir -p ${SCRATCH_DIR}/images ${SCRATCH_DIR}/task_manager
+                            cp -rp /scratch/work/public/overlay-fs-ext3/overlay-5GB-3.2M.ext3.gz ${SCRATCH_DIR}/task_manager.ext3.gz
+                            gunzip -f ${SCRATCH_DIR}/task_manager.ext3.gz
+                            singularity build --force ${SCRATCH_DIR}/images/task_manager.sif docker://thewillyp/task_manager:latest
+                        "
+                '
+                """
+            }
+        }
+
+        stage('Run via sbatch (Using Overlay)') {
+            steps {
+                sh """
+                ssh -o StrictHostKeyChecking=no ${SSH_HOST} 'sbatch <<EOF
+#!/bin/bash
+#SBATCH --job-name=task_manager
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --mem=4G
+#SBATCH --time=06:00:00
+#SBATCH --gres=gpu:0
+#SBATCH --cpus-per-task=2
+#SBATCH --output=${LOG_DIR}/run-%j.out
+#SBATCH --error=${LOG_DIR}/run-%j.err
+
+
+singularity run --containall --cleanenv --no-home \\
+  --overlay ${SCRATCH_DIR}/task_manager.ext3:rw \\
+  --bind /home/${SSH_USER}/.ssh \\
+  --bind ${SCRATCH_DIR}/task_manager:/app \\
+  ${SCRATCH_DIR}/images/task_manager.sif
+EOF'
+                """
+            }
+        }
+    }
+}
