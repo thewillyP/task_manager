@@ -40,7 +40,7 @@ pipeline {
             }
         }
 
-        stage('Build with srun (conditionally)') {
+       stage('Build with srun (conditionally)') {
             steps {
                 script {
                     def checkCommand = """
@@ -56,9 +56,9 @@ pipeline {
                             srun --nodes=1 --ntasks=1 --mem=4G --time=00:15:00 \\
                                 --job-name=build_task_manager \\
                                 bash -c \'
-                                    mkdir -p ${SCRATCH_DIR}/images ${SCRATCH_DIR}/task_manager
-                                    cp -rp /scratch/work/public/overlay-fs-ext3/overlay-5GB-3.2M.ext3.gz ${SCRATCH_DIR}/task_manager.ext3.gz
-                                    gunzip -f ${SCRATCH_DIR}/task_manager.ext3.gz
+                                    mkdir -p ${SCRATCH_DIR}/images ${SCRATCH_DIR}/task_manager && \\
+                                    cp -rp /scratch/work/public/overlay-fs-ext3/overlay-5GB-3.2M.ext3.gz ${SCRATCH_DIR}/task_manager.ext3.gz && \\
+                                    gunzip -f ${SCRATCH_DIR}/task_manager.ext3.gz && \\
                                     singularity build --force ${SIF_PATH} docker://thewillyp/task_manager:latest
                                 \'
                         '
