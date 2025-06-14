@@ -7,6 +7,7 @@ pipeline {
 
     environment {
         SSH_HOST = 'greene.hpc.nyu.edu'
+        SSH_USER = 'wlp9800'
         SCRATCH_DIR = "/scratch/wlp9800"
         LOG_DIR = "/vast/wlp9800/logs"
         SIF_PATH = "/scratch/wlp9800/images/task_manager.sif"
@@ -14,6 +15,24 @@ pipeline {
     }
 
     stages {
+        stage('Cancel existing task_manager jobs') {
+            steps {
+                sh """
+                ssh -o StrictHostKeyChecking=no ${SSH_HOST} '
+                    active_jobs=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
+                    if [ -n "\$active_jobs" ]; then
+                        echo "Found running task_manager jobs: \$active_jobs"
+                        for jobid in \$active_jobs; do
+                            echo "Cancelling job \$jobid"
+                            scancel \$jobid
+                        done
+                    else
+                        echo "No active task_manager jobs found."
+                    fi
+                '
+                """
+            }
+        }
         stage('Build with srun (conditionally)') {
             steps {
                 script {
