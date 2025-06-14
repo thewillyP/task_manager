@@ -15,6 +15,25 @@ pipeline {
     }
 
     stages {
+        stage('Check SLURM availability on executor') {
+            steps {
+                sh '''
+                echo "Checking srun and sbatch availability on this node..."
+                
+                echo -n "srun: "
+                command -v srun || echo "NOT FOUND"
+
+                echo -n "sbatch: "
+                command -v sbatch || echo "NOT FOUND"
+
+                echo "Trying: srun --version"
+                srun --version || echo "srun failed"
+
+                echo "Trying: sbatch --version"
+                sbatch --version || echo "sbatch failed"
+                '''
+            }
+        }
         stage('Test SSH connection') {
             steps {
                 sh """
