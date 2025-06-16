@@ -5,7 +5,7 @@ import { useDrag, useDrop } from 'react-dnd';
 const TaskItem = ({ task, index, moveTask, onCancel }) => {
   const [{ isDragging }, drag] = useDrag({
     type: 'TASK',
-    item: { index },
+    item: { id: task.id, index },
     collect: monitor => ({
       isDragging: monitor.isDragging()
     })
@@ -15,7 +15,7 @@ const TaskItem = ({ task, index, moveTask, onCancel }) => {
     accept: 'TASK',
     hover: (item) => {
       if (item.index !== index) {
-        moveTask(item.index, index);
+        moveTask(item.id, task.id, item.index < index ? 'before' : 'after');
         item.index = index;
       }
     }
@@ -45,22 +45,29 @@ const TaskQueue = ({ onQueueChange, refreshKey }) => {
     }
   };
 
-  const moveTask = async (fromIndex, toIndex) => {
+  const moveTask = async (movedTaskId, targetTaskId, moveType) => {
+    // Optimistically update the UI
     const newTasks = [...tasks];
-    const [movedTask] = newTasks.splice(fromIndex, 1);
-    newTasks.splice(toIndex, 0, movedTask);
+    const movedTaskIndex = newTasks.findIndex(task => task.id === movedTaskId);
+    const targetTaskIndex = newTasks.findIndex(task => task.id === targetTaskId);
+    const [movedTask] = newTasks.splice(movedTaskIndex, 1);
+    const insertIndex = moveType === 'before' ? targetTaskIndex : targetTaskIndex + 1;
+    newTasks.splice(insertIndex, 0, movedTask);
     setTasks(newTasks);
-    
+
     try {
-      await Promise.all(newTasks.map((task, index) => 
-        axios.put(`/api/task_instances/${task.id}`, {
-          position: index
-        })
-      ));
+      await axios.put(`/api/task_instances/${movedTaskId}`, {
+        reorder: {
+          move: moveType,
+          relativeTo: targetTaskId
+        }
+      });
       onQueueChange();
     } catch (error) {
-      console.error('Error updating task positions:', error);
-      alert('Error updating task positions: ' + (error.response?.data?.error || error.message));
+      console.error('Error reordering task:', error);
+      alert('Error reordering task: ' + (error.response?.data?.error || error.message));
+      // Revert by notifying parent to refresh
+      onQueueChange();
     }
   };
 
@@ -71,6 +78,7 @@ const TaskQueue = ({ onQueueChange, refreshKey }) => {
     } catch (error) {
       console.error('Error cancelling task:', error);
       alert('Error cancelling task: ' + (error.response?.data?.error || error.message));
+      onQueueChange();
     }
   };
 

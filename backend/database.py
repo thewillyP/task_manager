@@ -25,7 +25,6 @@ def init_db():
         task_archetype_id INTEGER,
         num_jobs_remaining INTEGER,
         state TEXT,
-        position INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(build_archetype_id) REFERENCES build_archetypes(id),
         FOREIGN KEY(task_archetype_id) REFERENCES task_archetypes(id)
@@ -89,13 +88,11 @@ def delete_archetype(table, id):
 def create_task_instance(build_archetype_id, task_archetype_id, num_jobs):
     conn = sqlite3.connect("/app/task_queue.db")
     c = conn.cursor()
-    c.execute('SELECT MAX(position) FROM task_instances WHERE state = "pending"')
-    max_position = c.fetchone()[0] or 0
     c.execute(
         """INSERT INTO task_instances 
-        (build_archetype_id, task_archetype_id, num_jobs_remaining, state, position)
-        VALUES (?, ?, ?, "pending", ?)""",
-        (build_archetype_id, task_archetype_id, num_jobs, max_position + 1),
+        (build_archetype_id, task_archetype_id, num_jobs_remaining, state)
+        VALUES (?, ?, ?, "pending")""",
+        (build_archetype_id, task_archetype_id, num_jobs),
     )
     instance_id = c.lastrowid
     conn.commit()
@@ -114,7 +111,7 @@ def get_task_instances(states):
         JOIN task_archetypes ta ON ti.task_archetype_id = ta.id
         JOIN build_archetypes ba ON ti.build_archetype_id = ba.id
         WHERE ti.state IN ({placeholders})
-        ORDER BY ti.position, ti.created_at DESC""",
+        ORDER BY ti.created_at ASC""",
         states,
     )
     instances = [
@@ -124,7 +121,6 @@ def get_task_instances(states):
             "task_archetype_id": row["task_archetype_id"],
             "num_jobs_remaining": row["num_jobs_remaining"],
             "state": row["state"],
-            "position": row["position"],
             "task_archetype_content": json.loads(row["task_content"]),
             "build_archetype_content": json.loads(row["build_content"]),
         }
@@ -134,7 +130,7 @@ def get_task_instances(states):
     return instances
 
 
-def update_task_instance(id, state=None, num_jobs_remaining=None, position=None):
+def update_task_instance(id, state=None, num_jobs_remaining=None):
     conn = sqlite3.connect("/app/task_queue.db")
     c = conn.cursor()
     updates = []
@@ -145,9 +141,6 @@ def update_task_instance(id, state=None, num_jobs_remaining=None, position=None)
     if num_jobs_remaining is not None:
         updates.append("num_jobs_remaining = ?")
         params.append(num_jobs_remaining)
-    if position is not None:
-        updates.append("position = ?")
-        params.append(position)
     if updates:
         params.append(id)
         c.execute(f"UPDATE task_instances SET {', '.join(updates)} WHERE id = ?", params)
