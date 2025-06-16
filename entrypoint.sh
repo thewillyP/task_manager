@@ -5,13 +5,13 @@ if [ -z "$JENKINS_API_TOKEN" ]; then
     echo "Warning: JENKINS_API_TOKEN is not set. Python server may fail to authenticate with Jenkins."
 fi
 if [ -z "$JENKINS_URL" ]; then
-    echo "Warning: JENKINS_URL is not set. Using default 'http://jenkins:8080'."
+    echo "Warning: JENKINS_URL is not set."
 fi
 if [ -z "$JENKINS_JOB" ]; then
-    echo "Warning: JENKINS_JOB is not set. Using default 'my-pipeline'."
+    echo "Warning: JENKINS_JOB is not set."
 fi
 if [ -z "$JENKINS_USER" ]; then
-    echo "Warning: JENKINS_USER is not set. Using default 'admin'."
+    echo "Warning: JENKINS_USER is not set."
 fi
 
 # Start Python server with Jenkins environment variables

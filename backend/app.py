@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import threading
 import time
 import os
@@ -185,14 +186,14 @@ def update_task_instance_route(id):
                     prev_timestamp = task[1]
                 if prev_timestamp:
                     # Set new timestamp halfway between prev and target
-                    prev_time = datetime.strptime(prev_timestamp, "%Y-%m-%d %H:%M:%S.%f")
-                    target_time = datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
+                    prev_time = datetime.datetime.strptime(prev_timestamp, "%Y-%m-%d %H:%M:%S.%f")
+                    target_time = datetime.datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
                     delta = (target_time - prev_time) / 2
                     new_timestamp = (prev_time + delta).strftime("%Y-%m-%d %H:%M:%S.%f")
                 else:
                     # No previous task; set slightly before target
-                    target_time = datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
-                    new_timestamp = (target_time - timedelta(microseconds=1)).strftime("%Y-%m-%d %H:%M:%S.%f")
+                    target_time = datetime.datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
+                    new_timestamp = (target_time - datetime.timedelta(microseconds=1)).strftime("%Y-%m-%d %H:%M:%S.%f")
             else:  # move == "after"
                 # Find the task just after the target
                 next_timestamp = None
@@ -205,14 +206,14 @@ def update_task_instance_route(id):
                         found_target = True
                 if next_timestamp:
                     # Set new timestamp halfway between target and next
-                    target_time = datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
-                    next_time = datetime.strptime(next_timestamp, "%Y-%m-%d %H:%M:%S.%f")
+                    target_time = datetime.datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
+                    next_time = datetime.datetime.strptime(next_timestamp, "%Y-%m-%d %H:%M:%S.%f")
                     delta = (next_time - target_time) / 2
                     new_timestamp = (target_time + delta).strftime("%Y-%m-%d %H:%M:%S.%f")
                 else:
                     # No next task; set slightly after target
-                    target_time = datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
-                    new_timestamp = (target_time + timedelta(microseconds=1)).strftime("%Y-%m-%d %H:%M:%S.%f")
+                    target_time = datetime.datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
+                    new_timestamp = (target_time + datetime.timedelta(microseconds=1)).strftime("%Y-%m-%d %H:%M:%S.%f")
 
             # Update the task's created_at
             c.execute(
