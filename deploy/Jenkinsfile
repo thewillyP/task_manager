@@ -10,7 +10,6 @@ pipeline {
         SCRATCH_DIR = "/scratch/wlp9800"
         LOG_DIR = "/vast/wlp9800/logs"
         SIF_PATH = "/scratch/wlp9800/images/task_manager.sif"
-        JENKINS_JOB = "${env.JOB_NAME}" // Current pipeline's name
     }
 
     stages {
@@ -80,7 +79,8 @@ pipeline {
                         credentialsId: 'jenkins-api-credentials',
                         usernameVariable: 'JENKINS_USER',
                         passwordVariable: 'JENKINS_API_TOKEN'
-                    )
+                    ),
+                    string(credentialsId: 'jenkins-job', variable: 'JENKINS_JOB')
                 ]) {
                     sh """
                     ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<'EOF'
