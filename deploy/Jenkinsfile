@@ -10,6 +10,7 @@ pipeline {
         SCRATCH_DIR = "/scratch/wlp9800"
         LOG_DIR = "/vast/wlp9800/logs"
         SIF_PATH = "/scratch/wlp9800/images/task_manager.sif"
+        JENKINS_JOB = "${env.JOB_NAME}" // Current pipeline's name
     }
 
     stages {
@@ -17,7 +18,9 @@ pipeline {
             steps {
                 script {
                     env.EXEC_HOST = sh(script: "hostname", returnStdout: true).trim()
+                    env.JENKINS_URL = "http://${env.EXEC_HOST}" // Construct JENKINS_URL from hostname
                     echo "Executor hostname: ${env.EXEC_HOST}"
+                    echo "Jenkins URL: ${env.JENKINS_URL}"
                 }
             }
         }
@@ -40,7 +43,7 @@ pipeline {
             }
         }
 
-       stage('Build with srun (conditionally)') {
+        stage('Build with srun (conditionally)') {
             steps {
                 script {
                     def checkCommand = """
@@ -72,8 +75,15 @@ pipeline {
 
         stage('Run via sbatch (Using Overlay)') {
             steps {
-                sh """
-                ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'jenkins-api-credentials',
+                        usernameVariable: 'JENKINS_USER',
+                        passwordVariable: 'JENKINS_API_TOKEN'
+                    )
+                ]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<'EOF'
 #!/bin/bash
 #SBATCH --job-name=task_manager
 #SBATCH --nodes=1
@@ -89,9 +99,14 @@ singularity run --containall --cleanenv --no-home \\
   --overlay ${SCRATCH_DIR}/task_manager.ext3:rw \\
   --bind /home/${SSH_USER}/.ssh \\
   --bind ${SCRATCH_DIR}/task_manager:/app \\
+  --env JENKINS_URL="${JENKINS_URL}" \\
+  --env JENKINS_JOB="${JENKINS_JOB}" \\
+  --env JENKINS_USER="${JENKINS_USER}" \\
+  --env JENKINS_API_TOKEN="${JENKINS_API_TOKEN}" \\
   ${SIF_PATH}
 EOF'
-                """
+                    """
+                }
             }
         }
     }
