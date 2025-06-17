@@ -1,0 +1,276 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'build_content', defaultValue: '', description: 'Build archetype content (JSON)')
+        string(name: 'task_content', defaultValue: '', description: 'Task archetype content (JSON)')
+        string(name: 'task_instance_id', defaultValue: '', description: 'Task instance ID')
+    }
+
+    environment {
+        SSH_USER = 'wlp9800'
+        LOG_DIR = "/vast/${SSH_USER}/logs"
+        SIF_DIR = "/scratch/${SSH_USER}/images"
+        TASK_MANAGER_PORT = '5000'
+        MAX_JOBS = '1980'
+    }
+
+    stages {
+        stage('Parse Parameters') {
+            steps {
+                script {
+                    def buildContent = readJSON text: params.build_content
+                    def taskContent = readJSON text: params.task_content
+
+                    env.IMAGE = buildContent.image
+                    env.DOCKER_URL = buildContent.docker_url
+                    env.BUILD_TIME = buildContent.build_time
+                    env.BUILD_MEMORY = buildContent.build_memory
+                    env.BUILD_CPUS = buildContent.build_cpus
+                    env.OVERLAY_SIZE = buildContent.overlay_size
+                    env.FORCE_BUILD = buildContent.force_build.toString()
+                    env.SWEEP_YML_URL = taskContent.sweep_yml_url
+                    env.BIND_MAPPINGS = taskContent.bind_mappings.join(',')
+                    env.DEPLOY_TIME = taskContent.deploy_time
+                    env.DEPLOY_CPUS = taskContent.deploy_cpus
+                    env.DEPLOY_GPUS = taskContent.deploy_gpus
+                    env.DEPLOY_MEMORY = taskContent.deploy_memory
+                    env.SIF_PATH = "${SIF_DIR}/${IMAGE}.sif"
+                }
+            }
+        }
+
+        stage('Get Executor Hostname') {
+            steps {
+                script {
+                    env.EXEC_HOST = sh(script: "hostname", returnStdout: true).trim()
+                    echo "Running on host: ${env.EXEC_HOST}"
+                }
+            }
+        }
+
+        stage('Check Task Manager') {
+            steps {
+                script {
+                    def taskManagerHost = sh(
+                        script: """
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
+                            jobids=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
+                            if [ -n "\$jobids" ]; then
+                                scontrol show job \$jobids | awk '/NodeList=/{for(i=1;i<=NF;i++) if(\$i ~ /^NodeList=/) {split(\$i,a,"="); print a[2]}}'
+                            else
+                                echo "NO_TASK_MANAGER"
+                            fi
+                        '
+                        """, returnStdout: true
+                    ).trim()
+
+                    if (taskManagerHost == 'NO_TASK_MANAGER') {
+                        error "No task_manager job running. Exiting build."
+                    } else {
+                        env.TASK_MANAGER_HOST = taskManagerHost
+                        echo "Task Manager running on host: ${TASK_MANAGER_HOST}"
+                    }
+                }
+            }
+        }
+
+        stage('Check Existing Sweep Jobs') {
+            steps {
+                script {
+                    def sweepHost = sh(
+                        script: """
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
+                            server_job=\$(squeue -u ${SSH_USER} -n sweep_server -h -o "%i")
+                            db_job=\$(squeue -u ${SSH_USER} -n sweep_db -h -o "%i")
+
+                            if [ -n "\$server_job" ] && [ -n "\$db_job" ]; then
+                                server_host=\$(scontrol show job \$server_job | awk "/NodeList=/{for(i=1;i<=NF;i++) if(\\\$i ~ /^NodeList=/) {split(\\\$i,a,\"=\"); print a[2]}}")
+                                echo "\$server_host"
+                            else
+                                echo "MISSING_JOBS"
+                            fi
+                        '
+                        """, returnStdout: true
+                    ).trim()
+
+                    if (sweepHost == 'MISSING_JOBS') {
+                        error "One or both of sweep jobs (sweep_server or sweep_db) are not running. Exiting build."
+                    } else {
+                        env.SWEEP_HOST = sweepHost
+                        echo "Sweep server running on host: ${env.SWEEP_HOST}"
+                    }
+                }
+            }
+        }
+
+        stage('Check Job and Sweep Slots') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'sweep_port', variable: 'SWEEP_PORT')
+                ]) {
+                    script {
+                        // Check available SLURM job slots
+                        def totalJobs = sh(
+                            script: """
+                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
+                                squeue -u ${SSH_USER} -h -t pending,running -r | wc -l
+                            '
+                            """, returnStdout: true
+                        ).trim().toInteger()
+
+                        def jobsAvailable = MAX_JOBS.toInteger() - totalJobs
+                        echo "Total jobs running/pending: ${totalJobs}"
+                        echo "Jobs available: ${jobsAvailable}"
+
+                        if (jobsAvailable <= 0) {
+                            // No job slots available, requeue task
+                            def response = httpRequest(
+                                url: "http://${TASK_MANAGER_HOST}:${TASK_MANAGER_PORT}/api/task_instances/${params.task_instance_id}",
+                                httpMode: 'PUT',
+                                contentType: 'APPLICATION_JSON',
+                                requestBody: '{"state": "pending"}'
+                            )
+                            error "No job slots available. Task ${params.task_instance_id} requeued."
+                        }
+
+                        // Create sweep instance to get sweep_id
+                        def sweepResponse = sh(
+                            script: """
+                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
+                                curl -s "${SWEEP_YML_URL}" | curl -s -X POST -F "file=@-" http://${SWEEP_HOST}:${SWEEP_PORT}/upload_config
+                            '
+                            """, returnStdout: true
+                        ).trim()
+
+                        env.SWEEP_ID = readJSON(text: sweepResponse).sweep_id
+                        echo "Created sweep instance with ID: ${SWEEP_ID}"
+
+                        // Check available sweeps
+                        def sweepCountResponse = httpRequest(
+                            url: "http://${SWEEP_HOST}:${SWEEP_PORT}/sweep_count/${env.SWEEP_ID}",
+                            httpMode: 'GET'
+                        )
+                        def sweepCount = readJSON(text: sweepCountResponse.content).remaining_configs
+                        echo "Remaining sweep configurations: ${sweepCount}"
+
+                        if (sweepCount == 0) {
+                            // No sweep configurations remaining, task is complete
+                            echo "No sweep configurations remaining. Task ${params.task_instance_id} is complete."
+                            return // Exit the stage successfully
+                        }
+
+                        // Set jobs to submit based on minimum of available jobs and sweep count
+                        env.JOBS_TO_SUBMIT = Math.min(jobsAvailable, sweepCount).toString()
+                        echo "Jobs to submit: ${JOBS_TO_SUBMIT}"
+
+                        if (sweepCount > jobsAvailable) {
+                            // More sweeps than available slots, requeue task after submitting jobs
+                            def response = httpRequest(
+                                url: "http://${TASK_MANAGER_HOST}:${TASK_MANAGER_PORT}/api/task_instances/${params.task_instance_id}",
+                                httpMode: 'PUT',
+                                contentType: 'APPLICATION_JSON',
+                                requestBody: '{"state": "pending"}'
+                            )
+                            echo "More sweep configurations (${sweepCount}) than available job slots (${jobsAvailable}). Submitting ${JOBS_TO_SUBMIT} jobs and requeuing task ${params.task_instance_id}."
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build Image') {
+            when {
+                expression {
+                    env.JOBS_TO_SUBMIT.toInteger() > 0
+                }
+            }
+            steps {
+                script {
+                    def sifExists = sh(
+                        script: """
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
+                            [ -f "${SIF_PATH}" ] && echo "EXISTS" || echo "NOT_EXISTS"
+                        '
+                        """, returnStdout: true
+                    ).trim()
+
+                    if (sifExists == 'EXISTS' && env.FORCE_BUILD != 'true') {
+                        echo "SIF file ${SIF_PATH} already exists. Skipping build."
+                    } else {
+                        def buildScript = """#!/bin/bash
+#SBATCH --job-name=build_${IMAGE}
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=${BUILD_CPUS}
+#SBATCH --mem=${BUILD_MEMORY}
+#SBATCH --time=${BUILD_TIME}
+#SBATCH --output=${LOG_DIR}/build_${IMAGE}-%j.out
+#SBATCH --error=${LOG_DIR}/build_${IMAGE}-%j.err
+
+mkdir -p ${SIF_DIR}
+singularity build ${SIF_PATH} ${DOCKER_URL}
+singularity overlay create --size ${OVERLAY_SIZE} ${SIF_PATH}
+"""
+
+                        env.BUILD_JOB_ID = sh(
+                            script: """
+                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch <<'EOF'
+${buildScript}
+EOF
+                            """, returnStdout: true
+                        ).trim().replaceAll(/.*Submitted batch job (\d+).*/, '$1')
+
+                        echo "Submitted build job with ID: ${env.BUILD_JOB_ID}"
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Jobs') {
+            when {
+                expression {
+                    env.JOBS_TO_SUBMIT.toInteger() > 0
+                }
+            }
+            steps {
+                withCredentials([
+                    string(credentialsId: 'wandb_api_key', variable: 'WANDB_API_KEY'),
+                    string(credentialsId: 'sweep_port', variable: 'SWEEP_PORT')
+                ]) {
+                    script {
+                        def deployScript = """#!/bin/bash
+#SBATCH --job-name=deploy_${IMAGE}
+#SBATCH --array=1-${JOBS_TO_SUBMIT}
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=${DEPLOY_CPUS}
+#SBATCH --gpus=${DEPLOY_GPUS}
+#SBATCH --mem=${DEPLOY_MEMORY}
+#SBATCH --time=${DEPLOY_TIME}
+#SBATCH --output=${LOG_DIR}/deploy_${IMAGE}-%A_%a.out
+#SBATCH --error=${LOG_DIR}/deploy_${IMAGE}-%A_%a.err
+#SBATCH --dependency=afterok:${BUILD_JOB_ID}
+
+singularity run --nv --containall --cleanenv --writable-tmpfs \\
+  --env SWEEP_ID=${SWEEP_ID} \\
+  --env BUILD_ARCHETYPE=${params.build_content} \\
+  --env TASK_ARCHETYPE=${params.task_content} \\
+  --env WANDB_API_KEY=${WANDB_API_KEY} \\
+  --env SWEEP_HOST=${SWEEP_HOST} \\
+  --env SWEEP_PORT=${SWEEP_PORT} \\
+  ${BIND_MAPPINGS ? "--bind ${BIND_MAPPINGS}" : ""} \\
+  ${SIF_PATH}
+"""
+
+                        sh """
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch <<'EOF'
+${deployScript}
+EOF
+                        """
+                    }
+                }
+            }
+        }
+    }
+}

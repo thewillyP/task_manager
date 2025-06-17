@@ -23,7 +23,7 @@ const TaskItem = ({ task, index, moveTask, onCancel }) => {
 
   return (
     <div ref={node => drag(drop(node))} className={`task-item ${isDragging ? 'dragging' : ''}`}>
-      <p>Task {task.id}: {task.task_archetype_content.pipeline} (Jobs: {task.num_jobs_remaining})</p>
+      <p>Task {task.id}: {task.task_archetype_content.pipeline}</p>
       <button onClick={() => onCancel(task.id)} className="bg-red-500">Cancel</button>
     </div>
   );

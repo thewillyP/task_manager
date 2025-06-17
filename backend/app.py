@@ -42,7 +42,6 @@ def process_queue():
                 params = {
                     "build_content": instance["build_archetype_content"],
                     "task_content": instance["task_archetype_content"],
-                    "num_jobs": instance["num_jobs_remaining"],
                     "task_instance_id": instance["id"],
                 }
 
@@ -59,7 +58,7 @@ def process_queue():
                 # Check response
                 if response.status_code == 201:
                     print(f"Successfully triggered Jenkins pipeline for task {instance['id']}")
-                    update_task_instance(instance["id"], "done", 0)
+                    update_task_instance(instance["id"], "done")
                 else:
                     print(
                         f"Failed to trigger Jenkins pipeline for task {instance['id']}: {response.status_code} {response.text}"
@@ -120,8 +119,8 @@ def delete_build_archetype(id):
 def handle_task_archetypes():
     if request.method == "POST":
         data = request.json
-        if "num_jobs" not in data["content"] or "pipeline" not in data["content"]:
-            return jsonify({"error": "num_jobs and pipeline are required"}), 400
+        if "pipeline" not in data["content"]:
+            return jsonify({"error": "pipeline is required"}), 400
         archetype_id = create_task_archetype(data["content"])
         return jsonify({"id": archetype_id}), 201
     return jsonify(get_task_archetypes())
@@ -137,7 +136,7 @@ def delete_task_archetype(id):
 def handle_task_instances():
     if request.method == "POST":
         data = request.json
-        instance_id = create_task_instance(data["build_archetype_id"], data["task_archetype_id"], data["num_jobs"])
+        instance_id = create_task_instance(data["build_archetype_id"], data["task_archetype_id"])
         process_queue()
         return jsonify({"id": instance_id}), 201
     state = request.args.get("state", "pending")
@@ -225,9 +224,9 @@ def update_task_instance_route(id):
             conn.commit()
 
         else:
-            # Handle existing state and num_jobs_remaining updates
-            update_task_instance(id, data.get("state"), data.get("num_jobs_remaining"))
-            if data.get("state") == "pending" or data.get("num_jobs_remaining") is not None:
+            # Handle state updates
+            update_task_instance(id, data.get("state"))
+            if data.get("state") == "pending":
                 process_queue()
 
         conn.close()
@@ -240,8 +239,7 @@ def update_task_instance_route(id):
 
 @app.route("/api/task_instances/<int:id>/rerun", methods=["POST"])
 def rerun_task_instance(id):
-    data = request.json
-    update_task_instance(id, "pending", data["num_jobs_remaining"])
+    update_task_instance(id, "pending")
     process_queue()
     return "", 204
 

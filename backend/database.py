@@ -23,7 +23,6 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         build_archetype_id INTEGER,
         task_archetype_id INTEGER,
-        num_jobs_remaining INTEGER,
         state TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(build_archetype_id) REFERENCES build_archetypes(id),
@@ -85,14 +84,14 @@ def delete_archetype(table, id):
     conn.close()
 
 
-def create_task_instance(build_archetype_id, task_archetype_id, num_jobs):
+def create_task_instance(build_archetype_id, task_archetype_id):
     conn = sqlite3.connect("/app/task_queue.db")
     c = conn.cursor()
     c.execute(
         """INSERT INTO task_instances 
-        (build_archetype_id, task_archetype_id, num_jobs_remaining, state)
-        VALUES (?, ?, ?, "pending")""",
-        (build_archetype_id, task_archetype_id, num_jobs),
+        (build_archetype_id, task_archetype_id, state)
+        VALUES (?, ?, "pending")""",
+        (build_archetype_id, task_archetype_id),
     )
     instance_id = c.lastrowid
     conn.commit()
@@ -119,7 +118,6 @@ def get_task_instances(states):
             "id": row["id"],
             "build_archetype_id": row["build_archetype_id"],
             "task_archetype_id": row["task_archetype_id"],
-            "num_jobs_remaining": row["num_jobs_remaining"],
             "state": row["state"],
             "task_archetype_content": json.loads(row["task_content"]),
             "build_archetype_content": json.loads(row["build_content"]),
@@ -130,19 +128,10 @@ def get_task_instances(states):
     return instances
 
 
-def update_task_instance(id, state=None, num_jobs_remaining=None):
+def update_task_instance(id, state=None):
     conn = sqlite3.connect("/app/task_queue.db")
     c = conn.cursor()
-    updates = []
-    params = []
     if state:
-        updates.append("state = ?")
-        params.append(state)
-    if num_jobs_remaining is not None:
-        updates.append("num_jobs_remaining = ?")
-        params.append(num_jobs_remaining)
-    if updates:
-        params.append(id)
-        c.execute(f"UPDATE task_instances SET {', '.join(updates)} WHERE id = ?", params)
+        c.execute("UPDATE task_instances SET state = ? WHERE id = ?", (state, id))
     conn.commit()
     conn.close()

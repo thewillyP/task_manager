@@ -6,7 +6,7 @@ import 'brace/theme/monokai';
 
 const ArchetypeEditor = ({ onSave, refreshKey }) => {
   const [buildJson, setBuildJson] = useState('{}');
-  const [taskJson, setTaskJson] = useState('{\n  "num_jobs": 1,\n  "pipeline": ""\n}');
+  const [taskJson, setTaskJson] = useState('{\n  "pipeline": ""\n}');
   const [selectedBuildId, setSelectedBuildId] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [buildArchetypes, setBuildArchetypes] = useState([]);
@@ -41,12 +41,12 @@ const ArchetypeEditor = ({ onSave, refreshKey }) => {
   const handleSaveTask = async () => {
     try {
       const parsedJson = JSON.parse(taskJson);
-      if (!parsedJson.num_jobs || !parsedJson.pipeline) {
-        alert('Task archetype must have num_jobs and pipeline');
+      if (!parsedJson.pipeline) {
+        alert('Task archetype must have pipeline');
         return;
       }
       await axios.post('/api/task_archetypes', { content: parsedJson });
-      setTaskJson('{\n  "num_jobs": 1,\n  "pipeline": ""\n}');
+      setTaskJson('{\n  "pipeline": ""\n}');
       onSave();
     } catch (error) {
       alert('Invalid JSON or server error: ' + (error.response?.data?.error || error.message));
@@ -59,11 +59,9 @@ const ArchetypeEditor = ({ onSave, refreshKey }) => {
         alert('Please select both build and task archetypes');
         return;
       }
-      const taskArchetype = taskArchetypes.find(t => t.id === parseInt(selectedTaskId));
       await axios.post('/api/task_instances', {
         build_archetype_id: parseInt(selectedBuildId),
         task_archetype_id: parseInt(selectedTaskId),
-        num_jobs: taskArchetype.content.num_jobs
       });
       onSave();
     } catch (error) {
