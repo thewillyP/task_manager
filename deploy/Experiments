@@ -11,7 +11,7 @@ pipeline {
         SSH_USER = 'wlp9800'
         LOG_DIR = "/vast/${SSH_USER}/logs"
         SIF_DIR = "/scratch/${SSH_USER}/images"
-        TASK_MANAGER_PORT = '5000'
+        TASK_MANAGER_PORT = '40378'
         MAX_JOBS = '1980'
     }
 
