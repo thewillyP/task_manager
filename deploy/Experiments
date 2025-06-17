@@ -57,7 +57,7 @@ pipeline {
                         ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
                             jobids=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
                             if [ -n "\$jobids" ]; then
-                                scontrol show job \$jobids | awk -F= "/NodeList=/ {print \$2}"
+                                scontrol show job \$jobids | awk '/NodeList=/ {split(\$0,a,"="); print a[2]}'
                             else
                                 echo NO_TASK_MANAGER
                             fi
@@ -69,7 +69,7 @@ pipeline {
                         error "No task_manager job running. Exiting build."
                     } else {
                         env.TASK_MANAGER_HOST = taskManagerHost
-                        echo "Task Manager running on host: ${TASK_MANAGER_HOST}"
+                        echo "Task Manager running on host: ${env.TASK_MANAGER_HOST}"
                     }
                 }
             }
