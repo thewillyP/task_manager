@@ -52,16 +52,18 @@ pipeline {
         stage('Check Task Manager') {
             steps {
                 script {
+                    def remoteScript = '''
+        jobids=$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
+        if [ -n "$jobids" ]; then
+            scontrol show job $jobids | awk '/NodeList=/ {split($0,a,"="); print a[2]}'
+        else
+            echo NO_TASK_MANAGER
+        fi
+        '''
+
                     def taskManagerHost = sh(
                         script: """
-                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} << 'EOF'
-                            jobids=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
-                            if [ -n "\$jobids" ]; then
-                                scontrol show job \$jobids | awk '/NodeList=/ {split(\$0,a,"="); print a[2]}'
-                            else
-                                echo NO_TASK_MANAGER
-                            fi
-                        EOF
+                        echo "${remoteScript.replace('"', '\\"')}" | ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} /bin/bash
                         """, returnStdout: true
                     ).trim()
 
