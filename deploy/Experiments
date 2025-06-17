@@ -50,32 +50,34 @@ pipeline {
         }
 
         stage('Check Task Manager') {
-            steps {
-                script {
-                    def script = '''
-                    jobid=$(squeue -u ${SSH_USER} -n task_manager -h -o "%i" | head -n1)
-                    if [ -n "$jobid" ]; then
-                    scontrol show job $jobid | awk '/NodeList=/ {for(i=1;i<=NF;i++) if ($i ~ /^NodeList=/) {split($i,a,"="); print a[2]}}' | head -n1
-                    else
-                    echo NO_TASK_MANAGER
-                    fi
-                    '''
+    steps {
+        script {
+            // Use triple double-quotes for variable interpolation inside remoteScript
+            def remoteScript = """
+jobid=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i" | head -n1)
+if [ -n "\$jobid" ]; then
+  scontrol show job \$jobid | awk '/NodeList=/ {for(i=1;i<=NF;i++) if (\$i ~ /^NodeList=/) {split(\$i,a,"="); print a[2]}}' | head -n1
+else
+  echo NO_TASK_MANAGER
+fi
+"""
 
-                    def taskManagerHost = sh(script: """
-                    ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} bash -s << 'ENDSSH'
-                    ${script}
-                    ENDSSH
-                    """, returnStdout: true).trim()
+            def taskManagerHost = sh(script: """
+ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} bash -s << 'EOF'
+${remoteScript}
+EOF
+""", returnStdout: true).trim()
 
-                    if (taskManagerHost == 'NO_TASK_MANAGER') {
-                        error "No task_manager job running. Exiting build."
-                    } else {
-                        env.TASK_MANAGER_HOST = taskManagerHost
-                        echo "Task Manager running on host: ${env.TASK_MANAGER_HOST}"
-                    }
-                }
+            if (taskManagerHost == 'NO_TASK_MANAGER') {
+                error "No task_manager job running. Exiting build."
+            } else {
+                env.TASK_MANAGER_HOST = taskManagerHost
+                echo "Task Manager running on host: ${env.TASK_MANAGER_HOST}"
             }
         }
+    }
+}
+
 
         stage('Check Existing Sweep Jobs') {
             steps {
