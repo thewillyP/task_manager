@@ -26,19 +26,19 @@ pipeline {
         stage('Cancel existing task_manager jobs') {
             steps {
                 sh """
-                ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
-                    active_jobs=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
-                    if [ -n "\$active_jobs" ]; then
-                        echo "Found running task_manager jobs: \$active_jobs"
-                        for jobid in \$active_jobs; do
-                            echo "Cancelling job \$jobid"
-                            scancel \$jobid
-                        done
-                    else
-                        echo "No active task_manager jobs found."
-                    fi
-                '
-                """
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
+                            active_jobs=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
+                            if [ -n "\$active_jobs" ]; then
+                                echo "Found running task_manager jobs: \$active_jobs"
+                                for jobid in \$active_jobs; do
+                                    echo "Cancelling job \$jobid"
+                                    scancel \$jobid
+                                done
+                            else
+                                echo "No active task_manager jobs found."
+                            fi
+                        '
+                    """
             }
         }
 
@@ -53,18 +53,18 @@ pipeline {
 
                     if (params.FORCE_REBUILD || result == "missing") {
                         echo "Building image (reason: ${params.FORCE_REBUILD ? 'forced' : 'not found'})"
-                        sh """
-                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
-                            srun --nodes=1 --ntasks=1 --mem=4G --time=00:15:00 \\
-                                --job-name=build_task_manager \\
-                                bash -c "
-                                    mkdir -p ${SCRATCH_DIR}/images ${SCRATCH_DIR}/task_manager && \\
-                                    cp -rp /scratch/work/public/overlay-fs-ext3/overlay-5GB-3.2M.ext3.gz ${SCRATCH_DIR}/task_manager.ext3.gz && \\
-                                    gunzip -f ${SCRATCH_DIR}/task_manager.ext3.gz && \\
-                                    singularity build --force ${SIF_PATH} docker://thewillyp/task_manager:latest
-                                "
-                        '
-                        """
+                            sh """
+                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
+                                srun --nodes=1 --ntasks=1 --mem=4G --time=00:15:00 \\
+                                    --job-name=build_task_manager \\
+                                    bash -c "
+                                        mkdir -p ${SCRATCH_DIR}/images ${SCRATCH_DIR}/task_manager && \\
+                                        cp -rp /scratch/work/public/overlay-fs-ext3/overlay-5GB-3.2M.ext3.gz ${SCRATCH_DIR}/task_manager.ext3.gz && \\
+                                        gunzip -f ${SCRATCH_DIR}/task_manager.ext3.gz && \\
+                                        singularity build --force ${SIF_PATH} docker://thewillyp/task_manager:latest
+                                    "
+                            '
+                            """
                     } else {
                         echo "Skipping build: ${SIF_PATH} already exists and FORCE_REBUILD=false"
                     }
@@ -80,10 +80,11 @@ pipeline {
                         usernameVariable: 'JENKINS_USER',
                         passwordVariable: 'JENKINS_API_TOKEN'
                     ),
-                    string(credentialsId: 'jenkins-job', variable: 'JENKINS_JOB')
+                    string(credentialsId: 'jenkins-job', variable: 'JENKINS_JOB'),
+                    string(credentialsId: 'jenkins-build-token', variable: 'JENKINS_BUILD_TOKEN')
                 ]) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<'EOF'
+                            sh """
+                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<'EOF'
 #!/bin/bash
 #SBATCH --job-name=task_manager
 #SBATCH --nodes=1
@@ -92,8 +93,8 @@ pipeline {
 #SBATCH --time=06:00:00
 #SBATCH --gres=gpu:0
 #SBATCH --cpus-per-task=2
-#SBATCH --output=${LOG_DIR}/run-%j.out
-#SBATCH --error=${LOG_DIR}/run-%j.err
+#SBATCH --output=${LOG_DIR}/task_manager-%j.out
+#SBATCH --error=${LOG_DIR}/task_manager-%j.err
 
 singularity run --containall --cleanenv --no-home \\
   --overlay ${SCRATCH_DIR}/task_manager.ext3:rw \\
@@ -103,9 +104,10 @@ singularity run --containall --cleanenv --no-home \\
   --env JENKINS_JOB="${JENKINS_JOB}" \\
   --env JENKINS_USER="${JENKINS_USER}" \\
   --env JENKINS_API_TOKEN="${JENKINS_API_TOKEN}" \\
+  --env JENKINS_BUILD_TOKEN="${JENKINS_BUILD_TOKEN}" \\
   ${SIF_PATH}
 EOF'
-                    """
+                            """
                 }
             }
         }

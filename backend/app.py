@@ -25,10 +25,17 @@ CORS(app)
 queue_lock = threading.Lock()
 
 # Jenkins configuration
-JENKINS_URL = os.environ.get("JENKINS_URL")  # Default Jenkins URL
-JENKINS_JOB = os.environ.get("JENKINS_JOB")  # Default pipeline name
-JENKINS_USER = os.environ.get("JENKINS_USER")  # Jenkins username
-JENKINS_API_TOKEN = os.environ.get("JENKINS_API_TOKEN")  # API token from env
+JENKINS_URL = os.environ.get("JENKINS_URL")
+JENKINS_JOB = os.environ.get("JENKINS_JOB")
+JENKINS_USER = os.environ.get("JENKINS_USER")
+JENKINS_API_TOKEN = os.environ.get("JENKINS_API_TOKEN")
+JENKINS_BUILD_TOKEN = os.environ.get("JENKINS_BUILD_TOKEN")  # Pipeline-specific token
+
+# Validate environment variables at startup
+required_env_vars = ["JENKINS_URL", "JENKINS_JOB", "JENKINS_USER", "JENKINS_API_TOKEN", "JENKINS_BUILD_TOKEN"]
+missing_vars = [var for var in required_env_vars if not os.environ.get(var)]
+if missing_vars:
+    raise RuntimeError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
 
 # Background task for queue processing
@@ -38,22 +45,24 @@ def process_queue():
         instances = get_task_instances(["pending"])
         for instance in instances:
             try:
-                # Use content from get_task_instances
+                # Construct parameters for Jenkins
                 params = {
                     "build_content": instance["build_archetype_content"],
                     "task_content": instance["task_archetype_content"],
                     "task_instance_id": instance["id"],
+                    "token": JENKINS_BUILD_TOKEN,  # Use pipeline-specific token
                 }
 
                 # Construct Jenkins build trigger URL
                 trigger_url = f"{JENKINS_URL}/job/{JENKINS_JOB}/buildWithParameters"
 
-                # Validate JENKINS_API_TOKEN
-                if not JENKINS_API_TOKEN:
-                    raise ValueError("JENKINS_API_TOKEN is not set")
-
                 # Send HTTP request to Jenkins
-                response = requests.post(trigger_url, params=params, auth=(JENKINS_USER, JENKINS_API_TOKEN), timeout=30)
+                response = requests.post(
+                    trigger_url,
+                    params=params,
+                    auth=(JENKINS_USER, JENKINS_API_TOKEN),  # Use API token for auth
+                    timeout=30,
+                )
 
                 # Check response
                 if response.status_code == 201:
@@ -61,8 +70,13 @@ def process_queue():
                     update_task_instance(instance["id"], "done")
                 else:
                     print(
-                        f"Failed to trigger Jenkins pipeline for task {instance['id']}: {response.status_code} {response.text}"
+                        f"Failed to trigger Jenkins pipeline for task {instance['id']}: "
+                        f"{response.status_code} {response.text}"
                     )
+                    if response.status_code == 401:
+                        print(f"Authentication failure for task {instance['id']}. Check JENKINS_API_TOKEN.")
+                    elif response.status_code == 403:
+                        print(f"Invalid build token for task {instance['id']}. Check JENKINS_BUILD_TOKEN.")
                     # Reprioritize: Reset to pending, update timestamp
                     c = conn.cursor()
                     c.execute(
@@ -151,22 +165,19 @@ def update_task_instance_route(id):
 
     try:
         if "reorder" in data:
-            # Handle relative reordering
             reorder = data["reorder"]
-            move = reorder.get("move")  # "before" or "after"
-            relative_to_id = reorder.get("relativeTo")  # Target task ID
+            move = reorder.get("move")
+            relative_to_id = reorder.get("relativeTo")
 
             if not move or not relative_to_id or move not in ["before", "after"]:
                 return jsonify({"error": "Invalid reorder parameters"}), 400
 
-            # Get the target task's created_at
             c.execute("SELECT created_at FROM task_instances WHERE id = ?", (relative_to_id,))
             target = c.fetchone()
             if not target:
                 return jsonify({"error": "Target task not found"}), 404
             target_timestamp = target[0]
 
-            # Get surrounding tasks to determine new timestamp
             c.execute(
                 """SELECT id, created_at FROM task_instances 
                    WHERE state = 'pending' AND id != ? 
@@ -177,24 +188,20 @@ def update_task_instance_route(id):
 
             new_timestamp = None
             if move == "before":
-                # Find the task just before the target
                 prev_timestamp = None
                 for task in pending_tasks:
                     if task[0] == relative_to_id:
                         break
                     prev_timestamp = task[1]
                 if prev_timestamp:
-                    # Set new timestamp halfway between prev and target
                     prev_time = datetime.datetime.strptime(prev_timestamp, "%Y-%m-%d %H:%M:%S.%f")
                     target_time = datetime.datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
                     delta = (target_time - prev_time) / 2
                     new_timestamp = (prev_time + delta).strftime("%Y-%m-%d %H:%M:%S.%f")
                 else:
-                    # No previous task; set slightly before target
                     target_time = datetime.datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
                     new_timestamp = (target_time - datetime.timedelta(microseconds=1)).strftime("%Y-%m-%d %H:%M:%S.%f")
-            else:  # move == "after"
-                # Find the task just after the target
+            else:
                 next_timestamp = None
                 found_target = False
                 for task in pending_tasks:
@@ -204,17 +211,14 @@ def update_task_instance_route(id):
                     if task[0] == relative_to_id:
                         found_target = True
                 if next_timestamp:
-                    # Set new timestamp halfway between target and next
                     target_time = datetime.datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
                     next_time = datetime.datetime.strptime(next_timestamp, "%Y-%m-%d %H:%M:%S.%f")
                     delta = (next_time - target_time) / 2
                     new_timestamp = (target_time + delta).strftime("%Y-%m-%d %H:%M:%S.%f")
                 else:
-                    # No next task; set slightly after target
                     target_time = datetime.datetime.strptime(target_timestamp, "%Y-%m-%d %H:%M:%S.%f")
                     new_timestamp = (target_time + datetime.timedelta(microseconds=1)).strftime("%Y-%m-%d %H:%M:%S.%f")
 
-            # Update the task's created_at
             c.execute(
                 """UPDATE task_instances 
                    SET created_at = ? 
@@ -222,9 +226,7 @@ def update_task_instance_route(id):
                 (new_timestamp, id),
             )
             conn.commit()
-
         else:
-            # Handle state updates
             update_task_instance(id, data.get("state"))
             if data.get("state") == "pending":
                 process_queue()
