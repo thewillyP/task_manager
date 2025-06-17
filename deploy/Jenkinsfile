@@ -15,11 +15,15 @@ pipeline {
     stages {
         stage('Determine Executor Hostname') {
             steps {
-                script {
-                    env.EXEC_HOST = sh(script: "hostname", returnStdout: true).trim()
-                    env.JENKINS_URL = "http://${env.EXEC_HOST}" // Construct JENKINS_URL from hostname
-                    echo "Executor hostname: ${env.EXEC_HOST}"
-                    echo "Jenkins URL: ${env.JENKINS_URL}"
+                withCredentials([
+                    string(credentialsId: 'jenkins-port', variable: 'JENKINS_PORT')
+                ]) {
+                    script {
+                        env.EXEC_HOST = sh(script: "hostname", returnStdout: true).trim()
+                        env.JENKINS_URL = "http://${env.EXEC_HOST}:${JENKINS_PORT}"
+                        echo "Executor hostname: ${env.EXEC_HOST}"
+                        echo "Jenkins URL: ${env.JENKINS_URL}"
+                    }
                 }
             }
         }
