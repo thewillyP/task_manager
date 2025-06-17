@@ -82,28 +82,23 @@ EOF
         stage('Check Existing Sweep Jobs') {
             steps {
                 script {
-                    def sweepHost = sh(
-                        script: """
-                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
-                            server_job=\$(squeue -u ${SSH_USER} -n sweep_server -h -o "%i")
-                            db_job=\$(squeue -u ${SSH_USER} -n sweep_db -h -o "%i")
+                def sweepHost = sh(script: """
+                    ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
+                    server_job=\$(squeue -u ${SSH_USER} -n sweep_server -h -o "%i")
+                    db_job=\$(squeue -u ${SSH_USER} -n sweep_db -h -o "%i")
+                    if [ -n "\$server_job" ] && [ -n "\$db_job" ]; then
+                        scontrol show job \$server_job | awk '/NodeList=/ {for(i=1;i<=NF;i++) if(\$i ~ /^NodeList=/) {split(\$i,a,"="); print a[2]}}'
+                    else
+                        echo "MISSING_JOBS"
+                    fi
+                    '
+                """, returnStdout: true).trim()
 
-                            if [ -n "\$server_job" ] && [ -n "\$db_job" ]; then
-                                server_host=\$(scontrol show job \$server_job | awk "/NodeList=/{for(i=1;i<=NF;i++) if(\\\$i ~ /^NodeList=/) {split(\\\$i,a,\"=\"); print a[2]}}")
-                                echo "\$server_host"
-                            else
-                                echo "MISSING_JOBS"
-                            fi
-                        '
-                        """, returnStdout: true
-                    ).trim()
-
-                    if (sweepHost == 'MISSING_JOBS') {
-                        error "One or both of sweep jobs (sweep_server or sweep_db) are not running. Exiting build."
-                    } else {
-                        env.SWEEP_HOST = sweepHost
-                        echo "Sweep server running on host: ${env.SWEEP_HOST}"
-                    }
+                if (sweepHost == 'MISSING_JOBS') {
+                    error "Required sweep jobs missing!"
+                }
+                env.SWEEP_HOST = sweepHost
+                echo "Sweep server running on host: ${env.SWEEP_HOST}"
                 }
             }
         }
