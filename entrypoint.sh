@@ -14,7 +14,7 @@ if [ ${#missing_vars[@]} -ne 0 ]; then
 fi
 
 # Start Python server with Jenkins environment variables
-JENKINS_URL="$JENKINS_URL" JENKINS_JOB="$JENKINS_JOB" JENKINS_USER="$JENKINS_USER" JENKINS_API_TOKEN="$JENKINS_API_TOKEN" JENKINS_BUILD_TOKEN="$JENKINS_BUILD_TOKEN" python /workspace/backend/app.py &
+JENKINS_URL="$JENKINS_URL" JENKINS_JOB="$JENKINS_JOB" JENKINS_USER="$JENKINS_USER" JENKINS_API_TOKEN="$JENKINS_API_TOKEN" JENKINS_BUILD_TOKEN="$JENKINS_BUILD_TOKEN" python /workspace/backend/app.py >> ~/app.log 2>&1 &
 
 # Copy frontend files and start npm
 cp -a /workspace/frontend/. ./frontend/ && cd ./frontend && npm start &

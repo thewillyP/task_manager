@@ -38,7 +38,9 @@ const TaskHistory = ({ onRerun, refreshKey }) => {
           <p>
             Task {task.id}: (State: {task.state}, Build ID: {task.build_archetype_id})
           </p>
-          {task.state === 'done' && <button onClick={() => handleRerun(task)}>Rerun</button>}
+          {['done', 'cancelled'].includes(task.state?.toLowerCase()) && (
+            <button onClick={() => handleRerun(task)}>Rerun</button>
+          )}
         </div>
       ))}
     </div>

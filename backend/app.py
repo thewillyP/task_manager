@@ -39,25 +39,41 @@ if missing_vars:
     raise RuntimeError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
 
-# Background task for queue processing
 def process_queue():
     with queue_lock:
+        print(f"[{datetime.datetime.now()}] Starting process_queue")
+
         conn = init_db()
         instances = get_task_instances(["pending"])
+        print(f"[{datetime.datetime.now()}] Found {len(instances)} pending task(s)")
+
         for instance in instances:
+            task_id = instance.get("id")
+            print(f"\n--- Processing Task {task_id} ---")
+
             try:
-                # Construct parameters for Jenkins
+                # Prepare parameters
+                build_content = instance.get("build_archetype_content")
+                task_content = instance.get("task_archetype_content")
+
+                if not build_content or not task_content:
+                    print(
+                        f"❌ Missing content in task {task_id}: build={bool(build_content)}, task={bool(task_content)}"
+                    )
+                    continue
+
                 params = {
-                    "build_content": instance["build_archetype_content"],
-                    "task_content": instance["task_archetype_content"],
-                    "task_instance_id": instance["id"],
+                    "build_content": build_content,
+                    "task_content": task_content,
+                    "task_instance_id": task_id,
                     "token": JENKINS_BUILD_TOKEN,
                 }
 
-                # Construct Jenkins build trigger URL
                 trigger_url = f"{JENKINS_URL}/job/{JENKINS_JOB}/buildWithParameters"
+                print(f"🔗 Trigger URL: {trigger_url}")
+                print(f"📤 Params: {params}")
 
-                # Send HTTP request to Jenkins
+                # Send to Jenkins
                 response = requests.post(
                     trigger_url,
                     params=params,
@@ -65,43 +81,44 @@ def process_queue():
                     timeout=30,
                 )
 
-                # Check response
+                print(f"📥 Response: {response.status_code} {response.text}")
+
                 if response.status_code == 201:
-                    print(f"Successfully triggered Jenkins job for task {instance['id']}")
-                    update_task_instance(instance["id"], "done")
+                    print(f"✅ Successfully triggered Jenkins job for task {task_id}")
+                    update_task_instance(task_id, "done")
                 else:
-                    print(
-                        f"Failed to trigger Jenkins job for task {instance['id']}: "
-                        f"{response.status_code} {response.text}"
-                    )
+                    print(f"❌ Failed to trigger Jenkins for task {task_id}: {response.status_code}")
                     if response.status_code == 401:
-                        print(f"Authentication failure for task {instance['id']}. Check JENKINS_API_TOKEN.")
+                        print("🔐 Jenkins auth failed. Check JENKINS_API_TOKEN.")
                     elif response.status_code == 403:
-                        print(f"Invalid build token for task {instance['id']}. Check JENKINS_BUILD_TOKEN.")
-                    # Reprioritize: Reset to pending, update timestamp
-                    c = conn.cursor()
-                    c.execute(
-                        """UPDATE task_instances 
-                           SET state = ?, created_at = CURRENT_TIMESTAMP 
-                           WHERE id = ?""",
-                        ("pending", instance["id"]),
-                    )
-                    conn.commit()
-                    print(f"Task {instance['id']} reprioritized for retry")
+                        print("⛔ Invalid Jenkins build token.")
+                    else:
+                        print("⚠️ Unhandled Jenkins response.")
+
+                    reprioritize_task(conn, task_id)
 
             except Exception as e:
-                print(f"Error processing task {instance['id']}: {e}")
-                # Reprioritize: Reset to pending, update timestamp
-                c = conn.cursor()
-                c.execute(
-                    """UPDATE task_instances 
-                       SET state = ?, created_at = CURRENT_TIMESTAMP 
-                       WHERE id = ?""",
-                    ("pending", instance["id"]),
-                )
-                conn.commit()
-                print(f"Task {instance['id']} reprioritized for retry")
+                print(f"💥 Exception processing task {task_id}: {e}")
+                reprioritize_task(conn, task_id)
+
+        print(f"[{datetime.datetime.now()}] Finished process_queue")
         conn.close()
+
+
+def reprioritize_task(conn, task_id):
+    print(f"🔄 Reprioritizing task {task_id} (set to pending, update timestamp)")
+    try:
+        c = conn.cursor()
+        c.execute(
+            """UPDATE task_instances 
+               SET state = ?, created_at = CURRENT_TIMESTAMP 
+               WHERE id = ?""",
+            ("pending", task_id),
+        )
+        conn.commit()
+        print(f"🔁 Task {task_id} reprioritized successfully")
+    except Exception as e:
+        print(f"🚫 Failed to reprioritize task {task_id}: {e}")
 
 
 # Background thread for periodic queue processing
