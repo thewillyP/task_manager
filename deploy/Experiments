@@ -52,13 +52,15 @@ pipeline {
         stage('Check Task Manager') {
             steps {
                 script {
-                    def taskManagerHost = sh(script: """ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} \\
-                    'jobid=\\\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i" | head -n1); \\
-                    if [ -n "\\\$jobid" ]; then \\
-                        scontrol show job \\\$jobid | awk \\'/NodeList=/ {for(i=1;i<=NF;i++) if (\\\$i ~ /^NodeList=/) {split(\\\$i,a,"="); print a[2]}}\\' | head -n1; \\
-                    else \\
-                        echo NO_TASK_MANAGER; \\
-                    fi'"
+                    def taskManagerHost = sh(script: """
+                    ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} bash <<'EOF'
+                    jobid=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i" | head -n1)
+                    if [ -n "\$jobid" ]; then
+                    scontrol show job \$jobid | awk '/NodeList=/ {for(i=1;i<=NF;i++) if (\$i ~ /^NodeList=/) {split(\$i,a,"="); print a[2]}}' | head -n1
+                    else
+                    echo NO_TASK_MANAGER
+                    fi
+                    EOF
                     """, returnStdout: true).trim()
 
                     if (taskManagerHost == 'NO_TASK_MANAGER') {
