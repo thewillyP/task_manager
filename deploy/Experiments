@@ -53,13 +53,14 @@ pipeline {
             steps {
                 script {
                     def remoteScript = '''
-        jobids=$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
-        if [ -n "$jobids" ]; then
-            scontrol show job $jobids | awk '/NodeList=/ {split($0,a,"="); print a[2]}'
-        else
-            echo NO_TASK_MANAGER
-        fi
-        '''
+jobids=$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
+if [ -n "$jobids" ]; then
+    scontrol show job $jobids | awk '/NodeList=/ {split($0,a,"="); print a[2]}'
+else
+    echo NO_TASK_MANAGER
+fi
+\n
+'''
 
                     def taskManagerHost = sh(
                         script: """
