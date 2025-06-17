@@ -54,13 +54,14 @@ pipeline {
                 script {
                     def taskManagerHost = sh(
                         script: """
-                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} \\
-                        bash -c \\"jobids=\\\$(squeue -u ${SSH_USER} -n task_manager -h -o '%i'); \\
-                        if [ -n \\\\\$jobids ]; then \\
-                            scontrol show job \\\\\$jobids | awk '/NodeList=/{for(i=1;i<=NF;i++) if(\\\\$i ~ /^NodeList=/) {split(\\\\$i,a,"="); print a[2]}}'; \\
-                        else \\
-                            echo NO_TASK_MANAGER; \\
-                        fi\\"
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
+                            jobids=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
+                            if [ -n "\$jobids" ]; then
+                                scontrol show job \$jobids | awk -F= "/NodeList=/ {print \$2}"
+                            else
+                                echo NO_TASK_MANAGER
+                            fi
+                        '
                         """, returnStdout: true
                     ).trim()
 
