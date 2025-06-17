@@ -6,7 +6,7 @@ import 'brace/theme/monokai';
 
 const ArchetypeEditor = ({ onSave, refreshKey }) => {
   const [buildJson, setBuildJson] = useState('{}');
-  const [taskJson, setTaskJson] = useState('{\n  "pipeline": ""\n}');
+  const [taskJson, setTaskJson] = useState('{}');
   const [selectedBuildId, setSelectedBuildId] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [buildArchetypes, setBuildArchetypes] = useState([]);
@@ -41,12 +41,8 @@ const ArchetypeEditor = ({ onSave, refreshKey }) => {
   const handleSaveTask = async () => {
     try {
       const parsedJson = JSON.parse(taskJson);
-      if (!parsedJson.pipeline) {
-        alert('Task archetype must have pipeline');
-        return;
-      }
       await axios.post('/api/task_archetypes', { content: parsedJson });
-      setTaskJson('{\n  "pipeline": ""\n}');
+      setTaskJson('{}');
       onSave();
     } catch (error) {
       alert('Invalid JSON or server error: ' + (error.response?.data?.error || error.message));
@@ -123,7 +119,7 @@ const ArchetypeEditor = ({ onSave, refreshKey }) => {
             <option value="">Select Task Archetype</option>
             {taskArchetypes.map(arch => (
               <option key={arch.id} value={arch.id}>
-                Task #{arch.id} ({arch.content.pipeline})
+                Task #{arch.id}
               </option>
             ))}
           </select>

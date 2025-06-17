@@ -36,8 +36,7 @@ const TaskHistory = ({ onRerun, refreshKey }) => {
       {history.map(task => (
         <div key={task.id} className="task-item">
           <p>
-            Task {task.id}: {task.task_archetype_content.pipeline} 
-            (State: {task.state}, Build ID: {task.build_archetype_id})
+            Task {task.id}: (State: {task.state}, Build ID: {task.build_archetype_id})
           </p>
           {task.state === 'done' && <button onClick={() => handleRerun(task)}>Rerun</button>}
         </div>

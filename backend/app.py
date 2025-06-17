@@ -30,7 +30,7 @@ JENKINS_URL = os.environ.get("JENKINS_URL")
 JENKINS_JOB = os.environ.get("JENKINS_JOB")
 JENKINS_USER = os.environ.get("JENKINS_USER")
 JENKINS_API_TOKEN = os.environ.get("JENKINS_API_TOKEN")
-JENKINS_BUILD_TOKEN = os.environ.get("JENKINS_BUILD_TOKEN")  # Pipeline-specific token
+JENKINS_BUILD_TOKEN = os.environ.get("JENKINS_BUILD_TOKEN")
 
 # Validate environment variables at startup
 required_env_vars = ["JENKINS_URL", "JENKINS_JOB", "JENKINS_USER", "JENKINS_API_TOKEN", "JENKINS_BUILD_TOKEN"]
@@ -51,7 +51,7 @@ def process_queue():
                     "build_content": instance["build_archetype_content"],
                     "task_content": instance["task_archetype_content"],
                     "task_instance_id": instance["id"],
-                    "token": JENKINS_BUILD_TOKEN,  # Use pipeline-specific token
+                    "token": JENKINS_BUILD_TOKEN,
                 }
 
                 # Construct Jenkins build trigger URL
@@ -61,17 +61,17 @@ def process_queue():
                 response = requests.post(
                     trigger_url,
                     params=params,
-                    auth=(JENKINS_USER, JENKINS_API_TOKEN),  # Use API token for auth
+                    auth=(JENKINS_USER, JENKINS_API_TOKEN),
                     timeout=30,
                 )
 
                 # Check response
                 if response.status_code == 201:
-                    print(f"Successfully triggered Jenkins pipeline for task {instance['id']}")
+                    print(f"Successfully triggered Jenkins job for task {instance['id']}")
                     update_task_instance(instance["id"], "done")
                 else:
                     print(
-                        f"Failed to trigger Jenkins pipeline for task {instance['id']}: "
+                        f"Failed to trigger Jenkins job for task {instance['id']}: "
                         f"{response.status_code} {response.text}"
                     )
                     if response.status_code == 401:
@@ -134,8 +134,6 @@ def delete_build_archetype(id):
 def handle_task_archetypes():
     if request.method == "POST":
         data = request.json
-        if "pipeline" not in data["content"]:
-            return jsonify({"error": "pipeline is required"}), 400
         archetype_id = create_task_archetype(data["content"])
         return jsonify({"id": archetype_id}), 201
     return jsonify(get_task_archetypes())
