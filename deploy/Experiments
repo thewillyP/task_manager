@@ -55,9 +55,9 @@ pipeline {
                     def taskManagerHost = sh(
                         script: """
                             ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
-                                jobids=$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
-                                if [ -n "$jobids" ]; then
-                                    scontrol show job $jobids | awk -F= "/NodeList=/ {print \\$2}" | head -n1
+                                jobids=\$(squeue -u ${SSH_USER} -n task_manager -h -o "%i")
+                                if [ -n "\$jobids" ]; then
+                                    scontrol show job \$jobids | awk -F= "/NodeList=/ {print \\\$2}" | head -n1
                                 else
                                     echo NO_TASK_MANAGER
                                 fi
