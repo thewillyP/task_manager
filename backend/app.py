@@ -4,6 +4,7 @@ import threading
 import time
 import os
 import requests
+import sqlite3
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from database import (
@@ -157,8 +158,36 @@ def handle_task_instances():
     return jsonify(get_task_instances(state.split(",")))
 
 
-@app.route("/api/task_instances/<int:id>", methods=["PUT"])
+@app.route("/api/task_instances/<int:id>", methods=["GET", "PUT"])
 def update_task_instance_route(id):
+    if request.method == "GET":
+        conn = init_db()
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute(
+            """SELECT ti.*, ta.content as task_content, ba.content as build_content
+            FROM task_instances ti
+            JOIN task_archetypes ta ON ti.task_archetype_id = ta.id
+            JOIN build_archetypes ba ON ti.build_archetype_id = ba.id
+            WHERE ti.id = ?""",
+            (id,),
+        )
+        row = c.fetchone()
+        if not row:
+            conn.close()
+            return jsonify({"error": "Task instance not found"}), 404
+        instance = {
+            "id": row["id"],
+            "build_archetype_id": row["build_archetype_id"],
+            "task_archetype_id": row["task_archetype_id"],
+            "state": row["state"],
+            "sweep_id": row["sweep_id"],
+            "task_archetype_content": json.loads(row["task_content"]),
+            "build_archetype_content": json.loads(row["build_content"]),
+        }
+        conn.close()
+        return jsonify(instance)
+
     data = request.json
     conn = init_db()
     c = conn.cursor()
@@ -227,7 +256,20 @@ def update_task_instance_route(id):
             )
             conn.commit()
         else:
-            update_task_instance(id, data.get("state"))
+            state = data.get("state")
+            sweep_id = data.get("sweep_id")
+            if state or sweep_id:
+                fields = []
+                values = []
+                if state:
+                    fields.append("state = ?")
+                    values.append(state)
+                if sweep_id:
+                    fields.append("sweep_id = ?")
+                    values.append(sweep_id)
+                values.append(id)
+                c.execute(f"UPDATE task_instances SET {', '.join(fields)} WHERE id = ?", values)
+                conn.commit()
             if data.get("state") == "pending":
                 process_queue()
 

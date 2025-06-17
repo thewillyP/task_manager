@@ -24,6 +24,7 @@ def init_db():
         build_archetype_id INTEGER,
         task_archetype_id INTEGER,
         state TEXT,
+        sweep_id TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(build_archetype_id) REFERENCES build_archetypes(id),
         FOREIGN KEY(task_archetype_id) REFERENCES task_archetypes(id)
@@ -119,6 +120,7 @@ def get_task_instances(states):
             "build_archetype_id": row["build_archetype_id"],
             "task_archetype_id": row["task_archetype_id"],
             "state": row["state"],
+            "sweep_id": row["sweep_id"],
             "task_archetype_content": json.loads(row["task_content"]),
             "build_archetype_content": json.loads(row["build_content"]),
         }
@@ -128,10 +130,19 @@ def get_task_instances(states):
     return instances
 
 
-def update_task_instance(id, state=None):
+def update_task_instance(id, state=None, sweep_id=None):
     conn = sqlite3.connect("/app/task_queue.db")
     c = conn.cursor()
+    fields = []
+    values = []
     if state:
-        c.execute("UPDATE task_instances SET state = ? WHERE id = ?", (state, id))
-    conn.commit()
+        fields.append("state = ?")
+        values.append(state)
+    if sweep_id:
+        fields.append("sweep_id = ?")
+        values.append(sweep_id)
+    if fields:
+        values.append(id)
+        c.execute(f"UPDATE task_instances SET {', '.join(fields)} WHERE id = ?", values)
+        conn.commit()
     conn.close()
