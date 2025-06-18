@@ -11,7 +11,10 @@ const TaskHistory = ({ onRerun, refreshKey }) => {
   const fetchHistory = async () => {
     try {
       const res = await axios.get('/api/task_instances?state=done,cancelled');
-      setHistory(res.data);
+      const sortedHistory = res.data.sort((a, b) => 
+        new Date(b.created_at) - new Date(a.created_at)
+      );
+      setHistory(sortedHistory);
     } catch (error) {
       console.error('Error fetching history:', error);
     }
