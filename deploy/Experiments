@@ -13,7 +13,7 @@ pipeline {
         SIF_DIR = "/scratch/${SSH_USER}/images"
         TASK_MANAGER_PORT = '40378'
         MAX_JOBS = '1980'
-        SCRIPT_BASE_URL = 'https://raw.githubusercontent.com/thewillyP/task_manager/e914e64efa4bedae9e3fb18f2c3432cae33446c5/deploy/experiments'
+        SCRIPT_BASE_URL = 'https://raw.githubusercontent.com/thewillyP/task_manager/03f1c3210d64b5f2c9831ffe8d5049ac98c4e201/deploy/experiments'
     }
 
     stages {
