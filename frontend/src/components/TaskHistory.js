@@ -12,7 +12,7 @@ const TaskHistory = ({ onRerun, refreshKey }) => {
     try {
       const res = await axios.get('/api/task_instances?state=done,cancelled');
       const sortedHistory = res.data.sort((a, b) => 
-        new Date(b.created_at) - new Date(a.created_at)
+        new Date(a.created_at) - new Date(b.created_at)
       );
       setHistory(sortedHistory);
     } catch (error) {
