@@ -95,28 +95,32 @@ pipeline {
                             httpMode: 'GET'
                         )
                         def taskInstance = readJSON(text: taskInstanceResponse.content)
-                        env.SWEEP_ID = "${taskInstance.sweep_id ?: ''}"
+                        def sweepId = taskInstance.sweep_id
 
-                        if (!env.SWEEP_ID) {
+                        if (!sweepId) {
+                            echo "No sweep_id found, creating new sweep..."
                             def sweepResponse = sh(
                                 script: """
                                 ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'curl -s ${SCRIPT_BASE_URL}/create_sweep.sh | bash -s ${SWEEP_YML_URL} ${SWEEP_HOST} ${SWEEP_PORT}'
                                 """, returnStdout: true
                             ).trim()
 
-                            env.SWEEP_ID = readJSON(text: sweepResponse).sweep_id
-                            echo "Created new sweep instance with ID: ${env.SWEEP_ID}"
+                            sweepId = readJSON(text: sweepResponse).sweep_id
+                            echo "Created new sweep instance with ID: ${sweepId}"
 
                             httpRequest(
                                 url: "http://${TASK_MANAGER_HOST}:${TASK_MANAGER_PORT}/api/task_instances/${params.task_instance_id}",
                                 httpMode: 'PUT',
                                 contentType: 'APPLICATION_JSON',
-                                requestBody: "{\"sweep_id\": \"${env.SWEEP_ID}\"}"
+                                requestBody: "{\"sweep_id\": \"${sweepId}\"}"
                             )
-                            echo "Updated task instance ${params.task_instance_id} with sweep_id: ${env.SWEEP_ID}"
+                            echo "Updated task instance ${params.task_instance_id} with sweep_id: ${sweepId}"
                         } else {
-                            echo "Using existing sweep_id: ${env.SWEEP_ID}"
+                            echo "Using existing sweep_id: ${sweepId}"
                         }
+
+                        // Finally set the environment variable after ensuring it's not null
+                        env.SWEEP_ID = sweepId
                     }
                 }
             }
