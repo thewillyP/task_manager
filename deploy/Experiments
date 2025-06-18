@@ -95,7 +95,7 @@ pipeline {
                             httpMode: 'GET'
                         )
                         def taskInstance = readJSON(text: taskInstanceResponse.content)
-                        env.SWEEP_ID = taskInstance.sweep_id ?: ''
+                        env.SWEEP_ID = "${taskInstance.sweep_id ?: ''}"
 
                         if (!env.SWEEP_ID) {
                             def sweepResponse = sh(
@@ -132,9 +132,9 @@ pipeline {
                             ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'curl -s ${SCRIPT_BASE_URL}/check_slots.sh | bash -s ${SSH_USER} ${MAX_JOBS} ${SWEEP_HOST} ${SWEEP_PORT} ${SWEEP_ID} ${TASK_MANAGER_HOST} ${TASK_MANAGER_PORT} ${params.task_instance_id}'
                         """, returnStdout: true).trim()
 
-                        def totalJobs = slotInfo.total_jobs
-                        def jobsAvailable = slotInfo.jobs_available
-                        def sweepCount = slotInfo.sweep_count
+                        def totalJobs = slotInfo.total_jobs.toInteger()
+                        def jobsAvailable = slotInfo.jobs_available.toInteger()
+                        def sweepCount = slotInfo.sweep_count.toInteger()
 
                         echo "Total jobs running/pending: ${totalJobs}"
                         echo "Jobs available: ${jobsAvailable}"
