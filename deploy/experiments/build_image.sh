@@ -26,7 +26,7 @@ else
 #SBATCH --error=${LOG_DIR}/build_${IMAGE}-%j.err
 
 mkdir -p ${SIF_DIR}
-singularity build ${SIF_PATH} ${DOCKER_URL}
+singularity build --force ${SIF_PATH} ${DOCKER_URL}
 singularity overlay create --size ${OVERLAY_SIZE} ${SIF_PATH}
 EOF
 fi
