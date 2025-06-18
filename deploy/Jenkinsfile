@@ -16,7 +16,7 @@ pipeline {
         stage('Determine Executor Hostname') {
             steps {
                 withCredentials([
-                    string(credentialsId: 'jenkins-port', variable: 'JENKINS_PORT')
+                    string(credentialsId: 'jenkins_port', variable: 'JENKINS_PORT')
                 ]) {
                     script {
                         env.EXEC_HOST = sh(script: "hostname", returnStdout: true).trim()
