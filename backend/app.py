@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import json
 import threading
 import time
 import os
@@ -63,9 +64,9 @@ def process_queue():
                     continue
 
                 params = {
-                    "build_content": build_content,
-                    "task_content": task_content,
-                    "task_instance_id": task_id,
+                    "build_content": json.dumps(build_content),
+                    "task_content": json.dumps(task_content),
+                    "task_instance_id": str(task_id),
                     "token": JENKINS_BUILD_TOKEN,
                 }
 
@@ -73,10 +74,10 @@ def process_queue():
                 print(f"🔗 Trigger URL: {trigger_url}")
                 print(f"📤 Params: {params}")
 
-                # Send to Jenkins
+                # Send to Jenkins with form-encoded data
                 response = requests.post(
                     trigger_url,
-                    params=params,
+                    data=params,  # Use data for form-encoded POST
                     auth=(JENKINS_USER, JENKINS_API_TOKEN),
                     timeout=30,
                 )
@@ -87,14 +88,15 @@ def process_queue():
                     print(f"✅ Successfully triggered Jenkins job for task {task_id}")
                     update_task_instance(task_id, "done")
                 else:
-                    print(f"❌ Failed to trigger Jenkins for task {task_id}: {response.status_code}")
+                    print(f"❌ Failed to trigger Jenkins for task {task_id}: {response.status_code} {response.text}")
                     if response.status_code == 401:
                         print("🔐 Jenkins auth failed. Check JENKINS_API_TOKEN.")
                     elif response.status_code == 403:
                         print("⛔ Invalid Jenkins build token.")
+                    elif response.status_code == 500:
+                        print(f"⚠️ Jenkins internal server error: {response.text}")
                     else:
                         print("⚠️ Unhandled Jenkins response.")
-
                     reprioritize_task(conn, task_id)
 
             except Exception as e:
