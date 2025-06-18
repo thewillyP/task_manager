@@ -110,6 +110,8 @@ pipeline {
                                 """, returnStdout: true
                             ).trim()
 
+                            echo "Raw sweepResponse: '${sweepResponse}'"
+
                             sweepId = readJSON(text: sweepResponse).sweep_id
                             echo "Created new sweep instance with ID: ${sweepId}"
 
