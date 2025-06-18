@@ -19,10 +19,7 @@ const TaskHistory = ({ onRerun, refreshKey }) => {
 
   const handleRerun = async (task) => {
     try {
-      await axios.post('/api/task_instances', {
-        build_archetype_id: task.build_archetype_id,
-        task_archetype_id: task.task_archetype_id,
-      });
+      await axios.post(`/api/task_instances/${task.id}/rerun`);
       onRerun();
     } catch (error) {
       console.error('Error rerunning task:', error);

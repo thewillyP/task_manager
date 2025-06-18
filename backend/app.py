@@ -168,7 +168,11 @@ def delete_task_archetype(id):
 def handle_task_instances():
     if request.method == "POST":
         data = request.json
-        instance_id = create_task_instance(data["build_archetype_id"], data["task_archetype_id"])
+        instance_id = create_task_instance(
+            data["build_archetype_id"],
+            data["task_archetype_id"],
+            data.get("sweep_id"),  # Pass sweep_id if provided
+        )
         process_queue()
         return jsonify({"id": instance_id}), 201
     state = request.args.get("state", "pending")
@@ -300,9 +304,38 @@ def update_task_instance_route(id):
 
 @app.route("/api/task_instances/<int:id>/rerun", methods=["POST"])
 def rerun_task_instance(id):
-    update_task_instance(id, "pending")
-    process_queue()
-    return "", 204
+    try:
+        # Fetch the original task instance
+        conn = init_db()
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute(
+            """SELECT build_archetype_id, task_archetype_id, sweep_id
+               FROM task_instances
+               WHERE id = ?""",
+            (id,),
+        )
+        task = c.fetchone()
+        if not task:
+            conn.close()
+            return jsonify({"error": "Task instance not found"}), 404
+
+        # Create a new task instance with the same attributes
+        instance_id = create_task_instance(
+            task["build_archetype_id"],
+            task["task_archetype_id"],
+            task["sweep_id"],  # Copy the original sweep_id
+        )
+
+        conn.close()
+
+        # Trigger queue processing to handle the new task instance
+        process_queue()
+
+        return jsonify({"id": instance_id}), 201
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

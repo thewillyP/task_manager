@@ -85,14 +85,14 @@ def delete_archetype(table, id):
     conn.close()
 
 
-def create_task_instance(build_archetype_id, task_archetype_id):
+def create_task_instance(build_archetype_id, task_archetype_id, sweep_id=None):
     conn = sqlite3.connect("/app/task_queue.db")
     c = conn.cursor()
     c.execute(
         """INSERT INTO task_instances 
-        (build_archetype_id, task_archetype_id, state)
-        VALUES (?, ?, "pending")""",
-        (build_archetype_id, task_archetype_id),
+        (build_archetype_id, task_archetype_id, state, sweep_id)
+        VALUES (?, ?, 'pending', ?)""",
+        (build_archetype_id, task_archetype_id, sweep_id),
     )
     instance_id = c.lastrowid
     conn.commit()
