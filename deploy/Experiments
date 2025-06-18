@@ -30,7 +30,7 @@ pipeline {
                     env.BUILD_CPUS = buildContent.build_cpus
                     env.OVERLAY_SIZE = buildContent.overlay_size
                     env.FORCE_BUILD = buildContent.force_build.toString()
-                    env.SWEEP_YML_URL = taskContent.sweep_yml_url
+                    env.SWEEP_YML_URL = buildContent.sweep_yml_url
                     env.BIND_MAPPINGS = taskContent.bind_mappings.join(',')
                     env.DEPLOY_TIME = taskContent.deploy_time
                     env.DEPLOY_CPUS = taskContent.deploy_cpus
